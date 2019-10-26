@@ -1,0 +1,13 @@
+[package]
+name = "efm32pg12-hal"
+version = "0.1.0"
+authors = ["Timo Kröger <timokroeger93@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+efm32pg12-pac = { version = "0.1.0", path = "../efm32pg12-pac" }
+embedded-hal = { version = "0.2.3", features = ["unproven"] }
+
+[features]
+rt = ["efm32pg12-pac/rt"]
+default = ["rt"]
