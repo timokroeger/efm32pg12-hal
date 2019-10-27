@@ -354,8 +354,6 @@ where
 
     /// Configures the pin as open-source output.
     ///
-    /// The
-    ///
     /// The initial state is determined by the `state` parameter.
     /// An optional pull-down resistor can be configured with the `pull` parameter.
     ///
@@ -424,6 +422,12 @@ where
 {
     pub fn into_disabled(mut self) -> Pin<T, Disabled> {
         self.ty.clear_mode();
+
+        // When the pin was configured as output or as input with the glitch
+        // filter enabled the DOUT bit might be set. The DOUT bit enables a
+        // pull up resistor in DISABLED mode. Clear the DOUT bit to disable
+        // the pull-up as soon as possible.
+        self.ty.clear_dout_bit();
 
         Pin {
             ty: self.ty,
