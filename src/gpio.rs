@@ -69,7 +69,7 @@ macro_rules! gpios {
     )*) => {
         /// Contains a field for each individual GPIO pin.
         pub struct Parts {
-            $(pub $field: PinBuilder<$type, Floating, FilterOff>,)*
+            $(pub $field: PinBuilder<$type, Floating, NoFilter>,)*
         }
 
         impl GpioExt for GPIO {
@@ -216,39 +216,39 @@ use builder_types::*;
 mod builder_types {
     /// Internal trait implemented by types that indicate a pull-up or pull-down
     /// resistor configuration.
-    pub trait Pull {}
+    pub trait PullTrait {}
 
     /// Internal trait implemented by types that indicate a filter configuration
     /// for inputs.
-    pub trait Filter {}
+    pub trait FilterTrait {}
 
     pub struct Floating;
-    impl Pull for Floating {}
+    impl PullTrait for Floating {}
 
     pub struct PullDown;
-    impl Pull for PullDown {}
+    impl PullTrait for PullDown {}
 
     pub struct PullUp;
-    impl Pull for PullUp {}
+    impl PullTrait for PullUp {}
 
-    pub struct FilterOff;
-    impl Filter for FilterOff {}
+    pub struct NoFilter;
+    impl FilterTrait for NoFilter {}
 
-    pub struct FilterOn;
-    impl Filter for FilterOn {}
+    pub struct Filter;
+    impl FilterTrait for Filter {}
 }
 
 /// Builder type for pins.
 ///
 /// This can be obtained by accessing a field of [`Parts`] or by calling
 /// [`Pin::reset()`] on an existing pin.
-pub struct PinBuilder<T: PinTrait, P: Pull, F: Filter> {
+pub struct PinBuilder<T: PinTrait, P: PullTrait, F: FilterTrait> {
     ty: T,
     _pull: PhantomData<P>,
     _filter: PhantomData<F>,
 }
 
-impl<T: PinTrait, P: Pull, F: Filter> PinBuilder<T, P, F> {
+impl<T: PinTrait, P: PullTrait, F: FilterTrait> PinBuilder<T, P, F> {
     /// Disables any pull-up or pull-down resistors.
     pub fn floating(self) -> PinBuilder<T, Floating, F> {
         PinBuilder {
@@ -277,7 +277,7 @@ impl<T: PinTrait, P: Pull, F: Filter> PinBuilder<T, P, F> {
     }
 
     /// Enables the glitch filter on the input circuitry.
-    pub fn filter(self) -> PinBuilder<T, P, FilterOn> {
+    pub fn filter(self) -> PinBuilder<T, P, Filter> {
         PinBuilder {
             ty: self.ty,
             _pull: PhantomData,
@@ -286,7 +286,7 @@ impl<T: PinTrait, P: Pull, F: Filter> PinBuilder<T, P, F> {
     }
 
     /// Disables the glitch filter on the input circuitry.
-    pub fn no_filter(self) -> PinBuilder<T, P, FilterOff> {
+    pub fn no_filter(self) -> PinBuilder<T, P, NoFilter> {
         PinBuilder {
             ty: self.ty,
             _pull: PhantomData,
@@ -344,7 +344,7 @@ impl<T, M: Mode> Pin<T, M>
 where
     T: PinTrait,
 {
-    pub fn reset(mut self) -> PinBuilder<T, Floating, FilterOff> {
+    pub fn reset(mut self) -> PinBuilder<T, Floating, NoFilter> {
         self.ty.clear_mode();
 
         // When the pin was configured as output or as input with the glitch
@@ -361,11 +361,11 @@ where
     }
 }
 
-impl<T> From<PinBuilder<T, Floating, FilterOff>> for Pin<T, Disabled>
+impl<T> From<PinBuilder<T, Floating, NoFilter>> for Pin<T, Disabled>
 where
     T: PinTrait,
 {
-    fn from(pb: PinBuilder<T, Floating, FilterOff>) -> Self {
+    fn from(pb: PinBuilder<T, Floating, NoFilter>) -> Self {
         Self {
             ty: pb.ty,
             _mode: PhantomData,
@@ -373,11 +373,11 @@ where
     }
 }
 
-impl<T> From<PinBuilder<T, PullUp, FilterOff>> for Pin<T, Disabled>
+impl<T> From<PinBuilder<T, PullUp, NoFilter>> for Pin<T, Disabled>
 where
     T: PinTrait,
 {
-    fn from(mut pb: PinBuilder<T, PullUp, FilterOff>) -> Self {
+    fn from(mut pb: PinBuilder<T, PullUp, NoFilter>) -> Self {
         pb.ty.set_dout_bit();
 
         Self {
@@ -387,11 +387,11 @@ where
     }
 }
 
-impl<T> From<PinBuilder<T, Floating, FilterOff>> for Pin<T, Input>
+impl<T> From<PinBuilder<T, Floating, NoFilter>> for Pin<T, Input>
 where
     T: PinTrait,
 {
-    fn from(mut pb: PinBuilder<T, Floating, FilterOff>) -> Self {
+    fn from(mut pb: PinBuilder<T, Floating, NoFilter>) -> Self {
         pb.ty.set_mode(MODE::INPUT);
 
         Self {
@@ -401,11 +401,11 @@ where
     }
 }
 
-impl<T> From<PinBuilder<T, Floating, FilterOn>> for Pin<T, Input>
+impl<T> From<PinBuilder<T, Floating, Filter>> for Pin<T, Input>
 where
     T: PinTrait,
 {
-    fn from(mut pb: PinBuilder<T, Floating, FilterOn>) -> Self {
+    fn from(mut pb: PinBuilder<T, Floating, Filter>) -> Self {
         // Change to INPUT mode first, so that setting the DOUT bit does not
         // accidentally activate the pull-up resistor while still in DISABLED mode.
         pb.ty.set_mode(MODE::INPUT);
@@ -418,11 +418,11 @@ where
     }
 }
 
-impl<T> From<PinBuilder<T, PullDown, FilterOff>> for Pin<T, Input>
+impl<T> From<PinBuilder<T, PullDown, NoFilter>> for Pin<T, Input>
 where
     T: PinTrait,
 {
-    fn from(mut pb: PinBuilder<T, PullDown, FilterOff>) -> Self {
+    fn from(mut pb: PinBuilder<T, PullDown, NoFilter>) -> Self {
         pb.ty.set_mode(MODE::INPUTPULL);
 
         Self {
@@ -432,11 +432,11 @@ where
     }
 }
 
-impl<T> From<PinBuilder<T, PullUp, FilterOff>> for Pin<T, Input>
+impl<T> From<PinBuilder<T, PullUp, NoFilter>> for Pin<T, Input>
 where
     T: PinTrait,
 {
-    fn from(mut pb: PinBuilder<T, PullUp, FilterOff>) -> Self {
+    fn from(mut pb: PinBuilder<T, PullUp, NoFilter>) -> Self {
         pb.ty.set_dout_bit();
         pb.ty.set_mode(MODE::INPUTPULL);
 
@@ -447,11 +447,11 @@ where
     }
 }
 
-impl<T> From<PinBuilder<T, PullDown, FilterOn>> for Pin<T, Input>
+impl<T> From<PinBuilder<T, PullDown, Filter>> for Pin<T, Input>
 where
     T: PinTrait,
 {
-    fn from(mut pb: PinBuilder<T, PullDown, FilterOn>) -> Self {
+    fn from(mut pb: PinBuilder<T, PullDown, Filter>) -> Self {
         pb.ty.set_mode(MODE::INPUTPULLFILTER);
 
         Self {
@@ -461,11 +461,11 @@ where
     }
 }
 
-impl<T> From<PinBuilder<T, PullUp, FilterOn>> for Pin<T, Input>
+impl<T> From<PinBuilder<T, PullUp, Filter>> for Pin<T, Input>
 where
     T: PinTrait,
 {
-    fn from(mut pb: PinBuilder<T, PullUp, FilterOn>) -> Self {
+    fn from(mut pb: PinBuilder<T, PullUp, Filter>) -> Self {
         pb.ty.set_dout_bit();
         pb.ty.set_mode(MODE::INPUTPULLFILTER);
 
@@ -476,11 +476,11 @@ where
     }
 }
 
-impl<T> From<PinBuilder<T, Floating, FilterOff>> for Pin<T, Output<PushPull>>
+impl<T> From<PinBuilder<T, Floating, NoFilter>> for Pin<T, Output<PushPull>>
 where
     T: PinTrait,
 {
-    fn from(mut pb: PinBuilder<T, Floating, FilterOff>) -> Self {
+    fn from(mut pb: PinBuilder<T, Floating, NoFilter>) -> Self {
         pb.ty.set_mode(MODE::PUSHPULL);
 
         Self {
@@ -490,11 +490,11 @@ where
     }
 }
 
-impl<T> From<PinBuilder<T, Floating, FilterOff>> for Pin<T, Output<OpenSource>>
+impl<T> From<PinBuilder<T, Floating, NoFilter>> for Pin<T, Output<OpenSource>>
 where
     T: PinTrait,
 {
-    fn from(mut pb: PinBuilder<T, Floating, FilterOff>) -> Self {
+    fn from(mut pb: PinBuilder<T, Floating, NoFilter>) -> Self {
         pb.ty.set_mode(MODE::WIREDOR);
 
         Self {
@@ -504,11 +504,11 @@ where
     }
 }
 
-impl<T> From<PinBuilder<T, PullDown, FilterOff>> for Pin<T, Output<OpenSource>>
+impl<T> From<PinBuilder<T, PullDown, NoFilter>> for Pin<T, Output<OpenSource>>
 where
     T: PinTrait,
 {
-    fn from(mut pb: PinBuilder<T, PullDown, FilterOff>) -> Self {
+    fn from(mut pb: PinBuilder<T, PullDown, NoFilter>) -> Self {
         pb.ty.set_mode(MODE::WIREDORPULLDOWN);
 
         Self {
@@ -518,11 +518,11 @@ where
     }
 }
 
-impl<T> From<PinBuilder<T, Floating, FilterOff>> for Pin<T, Output<OpenDrain>>
+impl<T> From<PinBuilder<T, Floating, NoFilter>> for Pin<T, Output<OpenDrain>>
 where
     T: PinTrait,
 {
-    fn from(mut pb: PinBuilder<T, Floating, FilterOff>) -> Self {
+    fn from(mut pb: PinBuilder<T, Floating, NoFilter>) -> Self {
         pb.ty.set_mode(MODE::WIREDAND);
 
         Self {
@@ -532,11 +532,11 @@ where
     }
 }
 
-impl<T> From<PinBuilder<T, Floating, FilterOn>> for Pin<T, Output<OpenDrain>>
+impl<T> From<PinBuilder<T, Floating, Filter>> for Pin<T, Output<OpenDrain>>
 where
     T: PinTrait,
 {
-    fn from(mut pb: PinBuilder<T, Floating, FilterOn>) -> Self {
+    fn from(mut pb: PinBuilder<T, Floating, Filter>) -> Self {
         pb.ty.set_mode(MODE::WIREDANDFILTER);
 
         Self {
@@ -546,11 +546,11 @@ where
     }
 }
 
-impl<T> From<PinBuilder<T, PullUp, FilterOff>> for Pin<T, Output<OpenDrain>>
+impl<T> From<PinBuilder<T, PullUp, NoFilter>> for Pin<T, Output<OpenDrain>>
 where
     T: PinTrait,
 {
-    fn from(mut pb: PinBuilder<T, PullUp, FilterOff>) -> Self {
+    fn from(mut pb: PinBuilder<T, PullUp, NoFilter>) -> Self {
         pb.ty.set_mode(MODE::WIREDANDPULLUP);
 
         Self {
@@ -560,11 +560,11 @@ where
     }
 }
 
-impl<T> From<PinBuilder<T, PullUp, FilterOn>> for Pin<T, Output<OpenDrain>>
+impl<T> From<PinBuilder<T, PullUp, Filter>> for Pin<T, Output<OpenDrain>>
 where
     T: PinTrait,
 {
-    fn from(mut pb: PinBuilder<T, PullUp, FilterOn>) -> Self {
+    fn from(mut pb: PinBuilder<T, PullUp, Filter>) -> Self {
         pb.ty.set_mode(MODE::WIREDANDPULLUPFILTER);
 
         Self {
