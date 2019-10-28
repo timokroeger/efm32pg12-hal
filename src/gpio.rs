@@ -12,49 +12,37 @@ use crate::{
 };
 use core::marker::PhantomData;
 
-/// Implemented by types that indicate an GPIO mode.
-pub trait Mode {}
+/// Extension trait to use the peripheral bit set and clear feature.
+trait GpioClearSetExt {
+    /// Returns a pointer to the register block in aliased peripheral bit clear
+    /// memory region.
+    ///
+    /// Allows to clear bitfields without a read-modify-write operation.
+    unsafe fn ptr_clear() -> *const RegisterBlock;
 
-/// Internal trait to prevent duplicate implemenations of embedded-hal traits.
-/// Leaked because it is used as trait bound. Not relevant for the user.
-pub trait InputAvailable {}
+    /// Returns a pointer to the register block in aliased peripheral bit set
+    /// memory region.
+    ///
+    /// Allows to set bitfields without a read-modify-write operation.
+    unsafe fn ptr_set() -> *const RegisterBlock;
+}
 
-/// Marks a GPIO pin as being disabled.
-pub struct Disabled;
-impl Mode for Disabled {}
+#[allow(clippy::cast_ptr_alignment)]
+impl GpioClearSetExt for GPIO {
+    unsafe fn ptr_clear() -> *const RegisterBlock {
+        (Self::ptr() as *const u8).offset(0x0400_0000) as *const RegisterBlock
+    }
 
-/// Marks a GPIO pin as being used by a debug connection (SDW or JTAG).
-pub struct Debug;
-impl Mode for Debug {}
+    unsafe fn ptr_set() -> *const RegisterBlock {
+        (Self::ptr() as *const u8).offset(0x0600_0000) as *const RegisterBlock
+    }
+}
 
-/// Marks a GPIO pin as being configured as input.
-pub struct Input;
-impl Mode for Input {}
-impl InputAvailable for Input {}
-
-/// Marks a GPIO pin as being configured as output.
-pub struct Output<OM: OutputMode>(OM);
-impl<OM: OutputMode> Mode for Output<OM> {}
-impl<OM: OutputMode> InputAvailable for Output<OM> {}
-
-/// Implemented by types that indicate a GPIO output mode.
-///
-/// Used as trait bound by the [`Output`] type.
-/// This trait mostly exists for documentation purposes and should not be
-/// relevant for the user.
-pub trait OutputMode {}
-
-/// Marks a GPIO output pin as push-pull.
-pub struct PushPull;
-impl OutputMode for PushPull {}
-
-/// Marks a GPIO output pin as open-source.
-pub struct OpenSource;
-impl OutputMode for OpenSource {}
-
-/// Marks a GPIO output pin as open-drain.
-pub struct OpenDrain;
-impl OutputMode for OpenDrain {}
+/// Extension trait to split the GPIO register block into individual GPIO pins.
+pub trait GpioExt {
+    /// Splits the GPIO register block into individual GPIO pins.
+    fn split(self, cmu: &mut CMU) -> Parts;
+}
 
 /// Internal trait to abstract away raw register manipulation.
 /// Leaked because it is used as trait bound. Not relevant for the user.
@@ -66,12 +54,6 @@ pub trait PinTrait {
     fn read_dout_bit(&self) -> bool;
     fn write_douttgl_bit(&mut self);
     fn read_din_bit(&self) -> bool;
-}
-
-/// Extension trait to split the GPIO register block into individual GPIO pins.
-pub trait GpioExt {
-    /// Splits the GPIO register block into individual GPIO pins.
-    fn split(self, cmu: &mut CMU) -> Parts;
 }
 
 macro_rules! gpios {
@@ -108,6 +90,8 @@ macro_rules! gpios {
 
         $(
             /// Marks a specific pin.
+            ///
+            /// Used as trait bound by the [`Pin`] type.
             pub struct $type;
 
             impl PinTrait for $type {
@@ -227,30 +211,6 @@ gpios!(
     pk2, PK2, pk_model, mode2, pk_dout, pk_douttgl, pk_din, 2;
 );
 
-/// Extension trait to use the peripheral bit set and clear feature.
-trait GpioClearSetExt {
-    /// Returns a pointer to the register block in aliased peripheral bit clear memory region.
-    ///
-    /// Allows to clear bitfields without the need to perform a read-modify-write operation.
-    unsafe fn ptr_clear() -> *const RegisterBlock;
-
-    /// Returns a pointer to the register block in aliased peripheral bit set memory region.
-    ///
-    /// Allows to set bitfields without the need to perform a read-modify-write operation.
-    unsafe fn ptr_set() -> *const RegisterBlock;
-}
-
-#[allow(clippy::cast_ptr_alignment)]
-impl GpioClearSetExt for GPIO {
-    unsafe fn ptr_clear() -> *const RegisterBlock {
-        (Self::ptr() as *const u8).offset(0x0400_0000) as *const RegisterBlock
-    }
-
-    unsafe fn ptr_set() -> *const RegisterBlock {
-        (Self::ptr() as *const u8).offset(0x0600_0000) as *const RegisterBlock
-    }
-}
-
 // Use a private module to hide those types from the documentation.
 use builder_types::*;
 mod builder_types {
@@ -335,6 +295,44 @@ impl<T: PinTrait, P: Pull, F: Filter> PinBuilder<T, P, F> {
     }
 }
 
+/// Implemented by types that indicate an GPIO mode.
+///
+/// Used as trait bound by the [`Pin`] type.
+pub trait Mode {}
+
+/// Marks a GPIO pin as being disabled.
+pub struct Disabled;
+impl Mode for Disabled {}
+
+/// Marks a GPIO pin as being used by a debug connection (SDW or JTAG).
+pub struct Debug;
+impl Mode for Debug {}
+
+/// Marks a GPIO pin as being configured as input.
+pub struct Input;
+impl Mode for Input {}
+
+/// Marks a GPIO pin as being configured as output.
+pub struct Output<OM: OutputMode>(OM);
+impl<OM: OutputMode> Mode for Output<OM> {}
+
+/// Implemented by types that indicate a GPIO output mode.
+///
+/// Used as trait bound by the [`Output`] type.
+pub trait OutputMode {}
+
+/// Marks a GPIO output pin as push-pull.
+pub struct PushPull;
+impl OutputMode for PushPull {}
+
+/// Marks a GPIO output pin as open-source.
+pub struct OpenSource;
+impl OutputMode for OpenSource {}
+
+/// Marks a GPIO output pin as open-drain.
+pub struct OpenDrain;
+impl OutputMode for OpenDrain {}
+
 /// GPIO pin
 // TODO: More documentation
 pub struct Pin<T: PinTrait, M: Mode> {
@@ -342,7 +340,10 @@ pub struct Pin<T: PinTrait, M: Mode> {
     _mode: PhantomData<M>,
 }
 
-impl<T: PinTrait, M: Mode> Pin<T, M> {
+impl<T, M: Mode> Pin<T, M>
+where
+    T: PinTrait,
+{
     pub fn reset(mut self) -> PinBuilder<T, Floating, FilterOff> {
         self.ty.clear_mode();
 
@@ -360,7 +361,10 @@ impl<T: PinTrait, M: Mode> Pin<T, M> {
     }
 }
 
-impl<T: PinTrait> From<PinBuilder<T, Floating, FilterOff>> for Pin<T, Disabled> {
+impl<T> From<PinBuilder<T, Floating, FilterOff>> for Pin<T, Disabled>
+where
+    T: PinTrait,
+{
     fn from(pb: PinBuilder<T, Floating, FilterOff>) -> Self {
         Self {
             ty: pb.ty,
@@ -369,7 +373,10 @@ impl<T: PinTrait> From<PinBuilder<T, Floating, FilterOff>> for Pin<T, Disabled> 
     }
 }
 
-impl<T: PinTrait> From<PinBuilder<T, PullUp, FilterOff>> for Pin<T, Disabled> {
+impl<T> From<PinBuilder<T, PullUp, FilterOff>> for Pin<T, Disabled>
+where
+    T: PinTrait,
+{
     fn from(mut pb: PinBuilder<T, PullUp, FilterOff>) -> Self {
         pb.ty.set_dout_bit();
 
@@ -380,7 +387,10 @@ impl<T: PinTrait> From<PinBuilder<T, PullUp, FilterOff>> for Pin<T, Disabled> {
     }
 }
 
-impl<T: PinTrait> From<PinBuilder<T, Floating, FilterOff>> for Pin<T, Input> {
+impl<T> From<PinBuilder<T, Floating, FilterOff>> for Pin<T, Input>
+where
+    T: PinTrait,
+{
     fn from(mut pb: PinBuilder<T, Floating, FilterOff>) -> Self {
         pb.ty.set_mode(MODE::INPUT);
 
@@ -391,7 +401,10 @@ impl<T: PinTrait> From<PinBuilder<T, Floating, FilterOff>> for Pin<T, Input> {
     }
 }
 
-impl<T: PinTrait> From<PinBuilder<T, Floating, FilterOn>> for Pin<T, Input> {
+impl<T> From<PinBuilder<T, Floating, FilterOn>> for Pin<T, Input>
+where
+    T: PinTrait,
+{
     fn from(mut pb: PinBuilder<T, Floating, FilterOn>) -> Self {
         // Change to INPUT mode first, so that setting the DOUT bit does not
         // accidentally activate the pull-up resistor while still in DISABLED mode.
@@ -405,7 +418,10 @@ impl<T: PinTrait> From<PinBuilder<T, Floating, FilterOn>> for Pin<T, Input> {
     }
 }
 
-impl<T: PinTrait> From<PinBuilder<T, PullDown, FilterOff>> for Pin<T, Input> {
+impl<T> From<PinBuilder<T, PullDown, FilterOff>> for Pin<T, Input>
+where
+    T: PinTrait,
+{
     fn from(mut pb: PinBuilder<T, PullDown, FilterOff>) -> Self {
         pb.ty.set_mode(MODE::INPUTPULL);
 
@@ -416,7 +432,10 @@ impl<T: PinTrait> From<PinBuilder<T, PullDown, FilterOff>> for Pin<T, Input> {
     }
 }
 
-impl<T: PinTrait> From<PinBuilder<T, PullUp, FilterOff>> for Pin<T, Input> {
+impl<T> From<PinBuilder<T, PullUp, FilterOff>> for Pin<T, Input>
+where
+    T: PinTrait,
+{
     fn from(mut pb: PinBuilder<T, PullUp, FilterOff>) -> Self {
         pb.ty.set_dout_bit();
         pb.ty.set_mode(MODE::INPUTPULL);
@@ -428,7 +447,10 @@ impl<T: PinTrait> From<PinBuilder<T, PullUp, FilterOff>> for Pin<T, Input> {
     }
 }
 
-impl<T: PinTrait> From<PinBuilder<T, PullDown, FilterOn>> for Pin<T, Input> {
+impl<T> From<PinBuilder<T, PullDown, FilterOn>> for Pin<T, Input>
+where
+    T: PinTrait,
+{
     fn from(mut pb: PinBuilder<T, PullDown, FilterOn>) -> Self {
         pb.ty.set_mode(MODE::INPUTPULLFILTER);
 
@@ -439,7 +461,10 @@ impl<T: PinTrait> From<PinBuilder<T, PullDown, FilterOn>> for Pin<T, Input> {
     }
 }
 
-impl<T: PinTrait> From<PinBuilder<T, PullUp, FilterOn>> for Pin<T, Input> {
+impl<T> From<PinBuilder<T, PullUp, FilterOn>> for Pin<T, Input>
+where
+    T: PinTrait,
+{
     fn from(mut pb: PinBuilder<T, PullUp, FilterOn>) -> Self {
         pb.ty.set_dout_bit();
         pb.ty.set_mode(MODE::INPUTPULLFILTER);
@@ -451,7 +476,10 @@ impl<T: PinTrait> From<PinBuilder<T, PullUp, FilterOn>> for Pin<T, Input> {
     }
 }
 
-impl<T: PinTrait> From<PinBuilder<T, Floating, FilterOff>> for Pin<T, Output<PushPull>> {
+impl<T> From<PinBuilder<T, Floating, FilterOff>> for Pin<T, Output<PushPull>>
+where
+    T: PinTrait,
+{
     fn from(mut pb: PinBuilder<T, Floating, FilterOff>) -> Self {
         pb.ty.set_mode(MODE::PUSHPULL);
 
@@ -462,7 +490,10 @@ impl<T: PinTrait> From<PinBuilder<T, Floating, FilterOff>> for Pin<T, Output<Pus
     }
 }
 
-impl<T: PinTrait> From<PinBuilder<T, Floating, FilterOff>> for Pin<T, Output<OpenSource>> {
+impl<T> From<PinBuilder<T, Floating, FilterOff>> for Pin<T, Output<OpenSource>>
+where
+    T: PinTrait,
+{
     fn from(mut pb: PinBuilder<T, Floating, FilterOff>) -> Self {
         pb.ty.set_mode(MODE::WIREDOR);
 
@@ -473,7 +504,10 @@ impl<T: PinTrait> From<PinBuilder<T, Floating, FilterOff>> for Pin<T, Output<Ope
     }
 }
 
-impl<T: PinTrait> From<PinBuilder<T, PullDown, FilterOff>> for Pin<T, Output<OpenSource>> {
+impl<T> From<PinBuilder<T, PullDown, FilterOff>> for Pin<T, Output<OpenSource>>
+where
+    T: PinTrait,
+{
     fn from(mut pb: PinBuilder<T, PullDown, FilterOff>) -> Self {
         pb.ty.set_mode(MODE::WIREDORPULLDOWN);
 
@@ -484,7 +518,10 @@ impl<T: PinTrait> From<PinBuilder<T, PullDown, FilterOff>> for Pin<T, Output<Ope
     }
 }
 
-impl<T: PinTrait> From<PinBuilder<T, Floating, FilterOff>> for Pin<T, Output<OpenDrain>> {
+impl<T> From<PinBuilder<T, Floating, FilterOff>> for Pin<T, Output<OpenDrain>>
+where
+    T: PinTrait,
+{
     fn from(mut pb: PinBuilder<T, Floating, FilterOff>) -> Self {
         pb.ty.set_mode(MODE::WIREDAND);
 
@@ -495,7 +532,10 @@ impl<T: PinTrait> From<PinBuilder<T, Floating, FilterOff>> for Pin<T, Output<Ope
     }
 }
 
-impl<T: PinTrait> From<PinBuilder<T, Floating, FilterOn>> for Pin<T, Output<OpenDrain>> {
+impl<T> From<PinBuilder<T, Floating, FilterOn>> for Pin<T, Output<OpenDrain>>
+where
+    T: PinTrait,
+{
     fn from(mut pb: PinBuilder<T, Floating, FilterOn>) -> Self {
         pb.ty.set_mode(MODE::WIREDANDFILTER);
 
@@ -506,7 +546,10 @@ impl<T: PinTrait> From<PinBuilder<T, Floating, FilterOn>> for Pin<T, Output<Open
     }
 }
 
-impl<T: PinTrait> From<PinBuilder<T, PullUp, FilterOff>> for Pin<T, Output<OpenDrain>> {
+impl<T> From<PinBuilder<T, PullUp, FilterOff>> for Pin<T, Output<OpenDrain>>
+where
+    T: PinTrait,
+{
     fn from(mut pb: PinBuilder<T, PullUp, FilterOff>) -> Self {
         pb.ty.set_mode(MODE::WIREDANDPULLUP);
 
@@ -517,7 +560,10 @@ impl<T: PinTrait> From<PinBuilder<T, PullUp, FilterOff>> for Pin<T, Output<OpenD
     }
 }
 
-impl<T: PinTrait> From<PinBuilder<T, PullUp, FilterOn>> for Pin<T, Output<OpenDrain>> {
+impl<T> From<PinBuilder<T, PullUp, FilterOn>> for Pin<T, Output<OpenDrain>>
+where
+    T: PinTrait,
+{
     fn from(mut pb: PinBuilder<T, PullUp, FilterOn>) -> Self {
         pb.ty.set_mode(MODE::WIREDANDPULLUPFILTER);
 
@@ -527,6 +573,12 @@ impl<T: PinTrait> From<PinBuilder<T, PullUp, FilterOn>> for Pin<T, Output<OpenDr
         }
     }
 }
+
+/// Internal trait to prevent duplicate implemenations of embedded-hal traits.
+/// Leaked because it is used as trait bound. Not relevant for the user.
+pub trait InputAvailable {}
+impl InputAvailable for Input {}
+impl<OM: OutputMode> InputAvailable for Output<OM> {}
 
 impl<T, M> InputPin for Pin<T, M>
 where
