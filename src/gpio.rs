@@ -179,12 +179,15 @@ gpios!(
     pd14, PD14, pd_modeh, mode14, pd_dout, pd_douttgl, pd_din, 14;
     pd15, PD15, pd_modeh, mode15, pd_dout, pd_douttgl, pd_din, 15;
 
-/*
-    pf0, PF0, pf_model, mode0, pf_dout, pf_douttgl, pf_din, 0, Debug;
-    pf1, PF1, pf_model, mode1, pf_dout, pf_douttgl, pf_din, 1, Debug;
-    pf2, PF2, pf_model, mode2, pf_dout, pf_douttgl, pf_din, 2, Debug;
-    pf3, PF3, pf_model, mode3, pf_dout, pf_douttgl, pf_din, 3, Debug;
-*/
+    // Those pins are by default configured for the debug connection (SWD/JTAG).
+    // They are special in the sense that they cannot be reconfigerured when
+    // a debug connection is active. To prevent undefined behaviour it was
+    // decided not to support them in this HAL crate.
+    // pf0, PF0, pf_model, mode0, pf_dout, pf_douttgl, pf_din, 0;
+    // pf1, PF1, pf_model, mode1, pf_dout, pf_douttgl, pf_din, 1;
+    // pf2, PF2, pf_model, mode2, pf_dout, pf_douttgl, pf_din, 2;
+    // pf3, PF3, pf_model, mode3, pf_dout, pf_douttgl, pf_din, 3;
+
     pf4, PF4, pf_model, mode4, pf_dout, pf_douttgl, pf_din, 4;
     pf5, PF5, pf_model, mode5, pf_dout, pf_douttgl, pf_din, 5;
     pf6, PF6, pf_model, mode6, pf_dout, pf_douttgl, pf_din, 6;
