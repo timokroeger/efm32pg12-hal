@@ -79,6 +79,7 @@ macro_rules! gpios {
                 Parts {
                     $(
                         $field: PinBuilder {
+                            state: false,
                             ty: $type,
                             _pull: PhantomData,
                             _filter: PhantomData,
@@ -246,6 +247,12 @@ mod builder_types {
 /// This can be obtained by accessing a field of [`Parts`] or by calling
 /// [`Pin::reset()`] on an existing pin.
 pub struct PinBuilder<T: PinTrait, P: PullTrait, F: FilterTrait> {
+    // For the initial output state use a regular field to make the code not
+    // even more verbose than it is already.
+    state: bool,
+
+    // Use ZST for type state where it makes senses so that the compiler can
+    // check if the configuration is valid.
     ty: T,
     _pull: PhantomData<P>,
     _filter: PhantomData<F>,
@@ -255,6 +262,7 @@ impl<T: PinTrait, P: PullTrait, F: FilterTrait> PinBuilder<T, P, F> {
     /// Disables any pull-up or pull-down resistors.
     pub fn floating(self) -> PinBuilder<T, Floating, F> {
         PinBuilder {
+            state: self.state,
             ty: self.ty,
             _pull: PhantomData,
             _filter: PhantomData,
@@ -264,6 +272,7 @@ impl<T: PinTrait, P: PullTrait, F: FilterTrait> PinBuilder<T, P, F> {
     /// Enables a pull-up resistor.
     pub fn pull_up(self) -> PinBuilder<T, PullUp, F> {
         PinBuilder {
+            state: self.state,
             ty: self.ty,
             _pull: PhantomData,
             _filter: PhantomData,
@@ -273,6 +282,7 @@ impl<T: PinTrait, P: PullTrait, F: FilterTrait> PinBuilder<T, P, F> {
     /// Enables a pull-down resistor.
     pub fn pull_pown(self) -> PinBuilder<T, PullDown, F> {
         PinBuilder {
+            state: self.state,
             ty: self.ty,
             _pull: PhantomData,
             _filter: PhantomData,
@@ -282,6 +292,7 @@ impl<T: PinTrait, P: PullTrait, F: FilterTrait> PinBuilder<T, P, F> {
     /// Enables the glitch filter on the input circuitry.
     pub fn filter(self) -> PinBuilder<T, P, Filter> {
         PinBuilder {
+            state: self.state,
             ty: self.ty,
             _pull: PhantomData,
             _filter: PhantomData,
@@ -291,6 +302,27 @@ impl<T: PinTrait, P: PullTrait, F: FilterTrait> PinBuilder<T, P, F> {
     /// Disables the glitch filter on the input circuitry.
     pub fn no_filter(self) -> PinBuilder<T, P, NoFilter> {
         PinBuilder {
+            state: self.state,
+            ty: self.ty,
+            _pull: PhantomData,
+            _filter: PhantomData,
+        }
+    }
+
+    /// Sets an output to high before enabling it.
+    pub fn set_high(self) -> PinBuilder<T, P, F> {
+        PinBuilder {
+            state: true,
+            ty: self.ty,
+            _pull: PhantomData,
+            _filter: PhantomData,
+        }
+    }
+
+    /// Sets an output to high before enabling it.
+    pub fn set_low(self) -> PinBuilder<T, P, F> {
+        PinBuilder {
+            state: false,
             ty: self.ty,
             _pull: PhantomData,
             _filter: PhantomData,
@@ -357,6 +389,7 @@ where
         self.ty.clear_dout_bit();
 
         PinBuilder {
+            state: false,
             ty: self.ty,
             _pull: PhantomData,
             _filter: PhantomData,
@@ -484,6 +517,9 @@ where
     T: PinTrait,
 {
     fn from(mut pb: PinBuilder<T, Floating, NoFilter>) -> Self {
+        if pb.state {
+            pb.ty.set_dout_bit();
+        }
         pb.ty.set_mode(MODE::PUSHPULL);
 
         Self {
@@ -499,6 +535,9 @@ where
 {
     fn from(mut pb: PinBuilder<T, Floating, NoFilter>) -> Self {
         pb.ty.set_mode(MODE::WIREDOR);
+        if pb.state {
+            pb.ty.set_dout_bit();
+        }
 
         Self {
             ty: pb.ty,
@@ -513,6 +552,9 @@ where
 {
     fn from(mut pb: PinBuilder<T, PullDown, NoFilter>) -> Self {
         pb.ty.set_mode(MODE::WIREDORPULLDOWN);
+        if pb.state {
+            pb.ty.set_dout_bit();
+        }
 
         Self {
             ty: pb.ty,
@@ -526,6 +568,9 @@ where
     T: PinTrait,
 {
     fn from(mut pb: PinBuilder<T, Floating, NoFilter>) -> Self {
+        if pb.state {
+            pb.ty.set_dout_bit();
+        }
         pb.ty.set_mode(MODE::WIREDAND);
 
         Self {
@@ -540,6 +585,9 @@ where
     T: PinTrait,
 {
     fn from(mut pb: PinBuilder<T, Floating, Filter>) -> Self {
+        if pb.state {
+            pb.ty.set_dout_bit();
+        }
         pb.ty.set_mode(MODE::WIREDANDFILTER);
 
         Self {
@@ -554,6 +602,9 @@ where
     T: PinTrait,
 {
     fn from(mut pb: PinBuilder<T, PullUp, NoFilter>) -> Self {
+        if pb.state {
+            pb.ty.set_dout_bit();
+        }
         pb.ty.set_mode(MODE::WIREDANDPULLUP);
 
         Self {
@@ -568,6 +619,9 @@ where
     T: PinTrait,
 {
     fn from(mut pb: PinBuilder<T, PullUp, Filter>) -> Self {
+        if pb.state {
+            pb.ty.set_dout_bit();
+        }
         pb.ty.set_mode(MODE::WIREDANDPULLUPFILTER);
 
         Self {
