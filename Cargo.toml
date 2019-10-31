@@ -3,6 +3,12 @@ name = "efm32pg12-hal"
 version = "0.1.0"
 authors = ["Timo Kröger <timokroeger93@gmail.com>"]
 edition = "2018"
+description = "Hardware abstraction layer (HAL) for Silicon Labs EFM32PG12 microcontrollers"
+keywords = ["embedded-hal", "efm32", "hal", "silabs"]
+categories = ["embedded", "hardware-support", "no-std"]
+readme = "README.md"
+license = "MIT/Apache-2.0"
+repository = "https://github.com/timokroeger/efm32pg12-hal"
 
 [dependencies]
 efm32pg12-pac = { version = "0.1.0", path = "../efm32pg12-pac" }
