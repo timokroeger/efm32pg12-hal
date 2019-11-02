@@ -11,7 +11,7 @@ use hal::{pac::Peripherals, prelude::*};
 #[entry]
 fn main() -> ! {
     let peripherals = Peripherals::take().unwrap();
-    let mut cmu = peripherals.CMU;
+    let mut cmu = peripherals.CMU.freeze();
     let gpio = peripherals.GPIO.split(&mut cmu);
 
     let mut led0 = gpio.pf4.push_pull_output(false);
