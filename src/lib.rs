@@ -5,6 +5,7 @@ use embedded_hal as hal;
 
 pub mod cmu;
 pub mod gpio;
+pub mod usart;
 pub mod prelude {
     pub use crate::{
         cmu::CmuExt as _,
