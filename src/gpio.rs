@@ -10,7 +10,7 @@ use crate::{
         GPIO,
     },
 };
-use core::marker::PhantomData;
+use core::{convert::Infallible, marker::PhantomData};
 
 /// Extension trait to use the peripheral bit set and clear feature.
 trait GpioClearSetExt {
@@ -564,7 +564,7 @@ where
     T: PinTrait,
     M: Mode + InputAvailable,
 {
-    type Error = ();
+    type Error = Infallible;
 
     fn is_low(&self) -> Result<bool, Self::Error> {
         Ok(!self.ty.read_din_bit())
@@ -576,7 +576,7 @@ where
 }
 
 impl<T: PinTrait> OutputPin for Pin<T, Output> {
-    type Error = ();
+    type Error = Infallible;
 
     fn set_low(&mut self) -> Result<(), Self::Error> {
         self.ty.clear_dout_bit();
@@ -600,7 +600,7 @@ impl<T: PinTrait> StatefulOutputPin for Pin<T, Output> {
 }
 
 impl<T: PinTrait> ToggleableOutputPin for Pin<T, Output> {
-    type Error = ();
+    type Error = Infallible;
 
     fn toggle(&mut self) -> Result<(), Self::Error> {
         self.ty.write_douttgl_bit();
