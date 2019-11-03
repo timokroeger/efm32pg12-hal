@@ -16,7 +16,11 @@ impl<U: Peripheral> Usart<U> {
     {
         cmu.enable_clock(&usart);
 
-        // TODO: Configure
+        // The default configuration of 8 data bits, 1 stop bit and no parity is ok for now
+        let baudrate = 115200;
+        let ovs = 16;
+        let clkdiv = 32 * cmu.hfperclk() / (ovs * baudrate) - 32;
+        usart.clkdiv.write(|w| unsafe { w.div().bits(clkdiv) });
 
         // Route peripheral to pins.
         usart
@@ -25,6 +29,8 @@ impl<U: Peripheral> Usart<U> {
         usart
             .routepen
             .write(|w| w.txpen().set_bit().rxpen().set_bit());
+
+        usart.cmd.write(|w| w.txen().set_bit().rxen().set_bit());
 
         Self(usart)
     }
