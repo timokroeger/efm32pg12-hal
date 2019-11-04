@@ -339,10 +339,6 @@ pub trait Mode {}
 pub struct Disabled;
 impl Mode for Disabled {}
 
-/// Marks a GPIO pin as being used by a debug connection (SDW or JTAG).
-pub struct Debug;
-impl Mode for Debug {}
-
 /// Marks a GPIO pin as being configured as input.
 pub struct Input;
 impl Mode for Input {}
