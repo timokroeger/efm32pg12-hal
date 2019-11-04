@@ -243,6 +243,9 @@ mod builder_types {
 }
 
 /// Builder type for pins.
+/// 
+/// Finalization methods like `input()` or `PinBuilder::push_pull_output()` are
+/// only implemented for configurations that are supported by the hardware.
 ///
 /// This can be obtained by accessing a field of [`Parts`] or by calling
 /// [`Pin::reset()`] on an existing pin.
@@ -348,13 +351,17 @@ pub struct Output;
 impl Mode for Output {}
 
 /// GPIO pin
-// TODO: More documentation
+///
+/// Use a [`PinBuilder`] to create a pin. To change a pin configuration
+/// use the [`Pin::reset()`] method to get back a builder. The cycle through
+/// disabled mode prevents a pin from entering unwanted intermediate modes.
 pub struct Pin<T: PinTrait, M: Mode> {
     ty: T,
     _mode: PhantomData<M>,
 }
 
 impl<T: PinTrait, M: Mode> Pin<T, M> {
+    /// Disables the pin and returns a builder.
     pub fn reset(mut self) -> PinBuilder<T, Floating, NoFilter> {
         self.ty.clear_mode();
 
@@ -374,6 +381,7 @@ impl<T: PinTrait, M: Mode> Pin<T, M> {
 }
 
 impl<T: PinTrait> PinBuilder<T, Floating, NoFilter> {
+    /// Disables the digital input and output circuitry for this pin.
     pub fn disabled(self) -> Pin<T, Disabled> {
         Pin {
             ty: self.ty,
@@ -383,6 +391,7 @@ impl<T: PinTrait> PinBuilder<T, Floating, NoFilter> {
 }
 
 impl<T: PinTrait> PinBuilder<T, PullUp, NoFilter> {
+    /// Disables the digital input and output circuitry for this pin.
     pub fn disabled(mut self) -> Pin<T, Disabled> {
         self.ty.set_dout_bit();
 
@@ -394,6 +403,7 @@ impl<T: PinTrait> PinBuilder<T, PullUp, NoFilter> {
 }
 
 impl<T: PinTrait> PinBuilder<T, Floating, NoFilter> {
+    /// Configures this pin as digital input.
     pub fn input(mut self) -> Pin<T, Input> {
         self.ty.set_mode(MODE::INPUT);
 
@@ -405,6 +415,7 @@ impl<T: PinTrait> PinBuilder<T, Floating, NoFilter> {
 }
 
 impl<T: PinTrait> PinBuilder<T, Floating, Filter> {
+    /// Configures this pin as digital input.
     pub fn input(mut self) -> Pin<T, Input> {
         // Change to INPUT mode first, so that setting the DOUT bit does not
         // accidentally activate the pull-up resistor while still in DISABLED mode.
@@ -419,6 +430,7 @@ impl<T: PinTrait> PinBuilder<T, Floating, Filter> {
 }
 
 impl<T: PinTrait> PinBuilder<T, PullDown, NoFilter> {
+    /// Configures this pin as digital input.
     pub fn input(mut self) -> Pin<T, Input> {
         self.ty.set_mode(MODE::INPUTPULL);
 
@@ -430,6 +442,7 @@ impl<T: PinTrait> PinBuilder<T, PullDown, NoFilter> {
 }
 
 impl<T: PinTrait> PinBuilder<T, PullUp, NoFilter> {
+    /// Configures this pin as digital input.
     pub fn input(mut self) -> Pin<T, Input> {
         self.ty.set_dout_bit();
         self.ty.set_mode(MODE::INPUTPULL);
@@ -442,6 +455,7 @@ impl<T: PinTrait> PinBuilder<T, PullUp, NoFilter> {
 }
 
 impl<T: PinTrait> PinBuilder<T, PullDown, Filter> {
+    /// Configures this pin as digital input.
     pub fn input(mut self) -> Pin<T, Input> {
         self.ty.set_mode(MODE::INPUTPULLFILTER);
 
@@ -453,6 +467,7 @@ impl<T: PinTrait> PinBuilder<T, PullDown, Filter> {
 }
 
 impl<T: PinTrait> PinBuilder<T, PullUp, Filter> {
+    /// Configures this pin as digital input.
     pub fn input(mut self) -> Pin<T, Input> {
         self.ty.set_dout_bit();
         self.ty.set_mode(MODE::INPUTPULLFILTER);
@@ -465,6 +480,7 @@ impl<T: PinTrait> PinBuilder<T, PullUp, Filter> {
 }
 
 impl<T: PinTrait> PinBuilder<T, Floating, NoFilter> {
+    /// Configures this pin as push-pull output.
     pub fn push_pull_output(mut self) -> Pin<T, Output> {
         if self.state {
             self.ty.set_dout_bit();
@@ -479,6 +495,7 @@ impl<T: PinTrait> PinBuilder<T, Floating, NoFilter> {
 }
 
 impl<T: PinTrait> PinBuilder<T, Floating, NoFilter> {
+    /// Configures this pin as open-source output.
     pub fn open_source_output(mut self) -> Pin<T, Output> {
         self.ty.set_mode(MODE::WIREDOR);
         if self.state {
@@ -493,6 +510,7 @@ impl<T: PinTrait> PinBuilder<T, Floating, NoFilter> {
 }
 
 impl<T: PinTrait> PinBuilder<T, PullDown, NoFilter> {
+    /// Configures this pin as open-source output.
     pub fn open_source_output(mut self) -> Pin<T, Output> {
         self.ty.set_mode(MODE::WIREDORPULLDOWN);
         if self.state {
@@ -507,6 +525,7 @@ impl<T: PinTrait> PinBuilder<T, PullDown, NoFilter> {
 }
 
 impl<T: PinTrait> PinBuilder<T, Floating, NoFilter> {
+    /// Configures this pin as open-drain output.
     pub fn open_drain_output(mut self) -> Pin<T, Output> {
         if self.state {
             self.ty.set_dout_bit();
@@ -521,6 +540,7 @@ impl<T: PinTrait> PinBuilder<T, Floating, NoFilter> {
 }
 
 impl<T: PinTrait> PinBuilder<T, Floating, Filter> {
+    /// Configures this pin as open-drain output.
     pub fn open_drain_output(mut self) -> Pin<T, Output> {
         if self.state {
             self.ty.set_dout_bit();
@@ -535,6 +555,7 @@ impl<T: PinTrait> PinBuilder<T, Floating, Filter> {
 }
 
 impl<T: PinTrait> PinBuilder<T, PullUp, NoFilter> {
+    /// Configures this pin as open-drain output.
     pub fn open_drain_output(mut self) -> Pin<T, Output> {
         if self.state {
             self.ty.set_dout_bit();
@@ -549,6 +570,7 @@ impl<T: PinTrait> PinBuilder<T, PullUp, NoFilter> {
 }
 
 impl<T: PinTrait> PinBuilder<T, PullUp, Filter> {
+    /// Configures this pin as open-drain output.
     pub fn open_drain_output(mut self) -> Pin<T, Output> {
         if self.state {
             self.ty.set_dout_bit();
