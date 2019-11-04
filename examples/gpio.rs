@@ -7,7 +7,6 @@ extern crate panic_itm;
 
 use cortex_m_rt::entry;
 use hal::{
-    gpio::{Input, Output, Pin, PushPull},
     pac::Peripherals,
     prelude::*,
 };
@@ -18,27 +17,27 @@ fn main() -> ! {
     let mut cmu = peripherals.CMU;
     let gpio = peripherals.GPIO.split(&mut cmu);
 
-    let mut led0: Pin<_, Output<PushPull>> = gpio.pf4.into();
-    let mut led1: Pin<_, Output<PushPull>> = gpio.pf5.into();
+    let mut led0 = gpio.pf4.push_pull_output();
+    let mut led1 = gpio.pf5.push_pull_output();
 
     // External pull-up resistor is too weak. Touching the backside of the
     // board makes the input toggle. Enable the internal pull-up improve
     // input noise resistance.
-    let btn0: Pin<_, Input> = gpio.pf6.pull_up().into();
-    let btn1: Pin<_, Input> = gpio.pf7.pull_up().into();
+    let btn0 = gpio.pf6.pull_up().input();
+    let btn1 = gpio.pf7.pull_up().input();
 
     // Each button controls a LED.
     loop {
         if btn0.is_low().unwrap() {
-            led0.set_high().unwrap();
+            led0.set_high().ok();
         } else {
-            led0.set_low().unwrap();
+            led0.set_low().ok();
         }
 
         if btn1.is_low().unwrap() {
-            led1.set_high().unwrap();
+            led1.set_high().ok();
         } else {
-            led1.set_low().unwrap();
+            led1.set_low().ok();
         }
     }
 }
