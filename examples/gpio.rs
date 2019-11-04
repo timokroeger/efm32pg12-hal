@@ -6,10 +6,7 @@ use efm32pg12_hal as hal;
 extern crate panic_itm;
 
 use cortex_m_rt::entry;
-use hal::{
-    pac::Peripherals,
-    prelude::*,
-};
+use hal::{pac::Peripherals, prelude::*};
 
 #[entry]
 fn main() -> ! {
@@ -17,8 +14,8 @@ fn main() -> ! {
     let mut cmu = peripherals.CMU;
     let gpio = peripherals.GPIO.split(&mut cmu);
 
-    let mut led0 = gpio.pf4.push_pull_output();
-    let mut led1 = gpio.pf5.push_pull_output();
+    let mut led0 = gpio.pf4.push_pull_output(false);
+    let mut led1 = gpio.pf5.push_pull_output(false);
 
     // External pull-up resistor is too weak. Touching the backside of the
     // board makes the input toggle. Enable the internal pull-up improve
