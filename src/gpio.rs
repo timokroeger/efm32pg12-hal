@@ -215,6 +215,53 @@ gpios!(
     pk2, PK2, pk_model, mode2, pk_dout, pk_douttgl, pk_din, 2;
 );
 
+/// Implemented by types that indicate an GPIO mode.
+///
+/// Used as trait bound by the [`Pin`] type.
+pub trait Mode {}
+
+/// Marks a GPIO pin as being disabled.
+pub struct Disabled;
+impl Mode for Disabled {}
+
+/// Marks a GPIO pin as being configured as input.
+pub struct Input;
+impl Mode for Input {}
+
+/// Marks a GPIO pin as being configured as output.
+pub struct Output;
+impl Mode for Output {}
+
+/// GPIO pin
+///
+/// Use a [`PinBuilder`] to create a pin. To change a pin configuration
+/// use the [`Pin::reset()`] method to get back a builder. The cycle through
+/// disabled mode prevents a pin from entering unwanted intermediate modes.
+pub struct Pin<T: PinTrait, M: Mode> {
+    ty: T,
+    _mode: PhantomData<M>,
+}
+
+impl<T: PinTrait, M: Mode> Pin<T, M> {
+    /// Disables the pin and returns a builder.
+    pub fn reset(mut self) -> PinBuilder<T, Floating, NoFilter> {
+        self.ty.clear_mode();
+
+        // When the pin was configured as output or as input with the glitch
+        // filter enabled the DOUT bit might be set. The DOUT bit enables a
+        // pull up resistor in DISABLED mode. Clear the DOUT bit to disable
+        // the pull-up as soon as possible.
+        self.ty.clear_dout_bit();
+
+        PinBuilder {
+            state: false,
+            ty: self.ty,
+            _pull: PhantomData,
+            _filter: PhantomData,
+        }
+    }
+}
+
 // Use a private module to hide those types from the documentation.
 use builder_types::*;
 mod builder_types {
@@ -324,53 +371,6 @@ impl<T: PinTrait, P: PullTrait, F: FilterTrait> PinBuilder<T, P, F> {
 
     /// Sets an output to high before enabling it.
     pub fn set_low(self) -> PinBuilder<T, P, F> {
-        PinBuilder {
-            state: false,
-            ty: self.ty,
-            _pull: PhantomData,
-            _filter: PhantomData,
-        }
-    }
-}
-
-/// Implemented by types that indicate an GPIO mode.
-///
-/// Used as trait bound by the [`Pin`] type.
-pub trait Mode {}
-
-/// Marks a GPIO pin as being disabled.
-pub struct Disabled;
-impl Mode for Disabled {}
-
-/// Marks a GPIO pin as being configured as input.
-pub struct Input;
-impl Mode for Input {}
-
-/// Marks a GPIO pin as being configured as output.
-pub struct Output;
-impl Mode for Output {}
-
-/// GPIO pin
-///
-/// Use a [`PinBuilder`] to create a pin. To change a pin configuration
-/// use the [`Pin::reset()`] method to get back a builder. The cycle through
-/// disabled mode prevents a pin from entering unwanted intermediate modes.
-pub struct Pin<T: PinTrait, M: Mode> {
-    ty: T,
-    _mode: PhantomData<M>,
-}
-
-impl<T: PinTrait, M: Mode> Pin<T, M> {
-    /// Disables the pin and returns a builder.
-    pub fn reset(mut self) -> PinBuilder<T, Floating, NoFilter> {
-        self.ty.clear_mode();
-
-        // When the pin was configured as output or as input with the glitch
-        // filter enabled the DOUT bit might be set. The DOUT bit enables a
-        // pull up resistor in DISABLED mode. Clear the DOUT bit to disable
-        // the pull-up as soon as possible.
-        self.ty.clear_dout_bit();
-
         PinBuilder {
             state: false,
             ty: self.ty,
