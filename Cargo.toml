@@ -11,7 +11,7 @@ license = "MIT/Apache-2.0"
 repository = "https://github.com/timokroeger/efm32pg12-hal"
 
 [dependencies]
-efm32pg12-pac = { version = "0.1.0", path = "../efm32pg12-pac" }
+efm32pg12-pac = { version = "0.2.0", path = "../efm32pg12-pac" }
 embedded-hal = { version = "0.2.3", features = ["unproven"] }
 
 [dev-dependencies]
