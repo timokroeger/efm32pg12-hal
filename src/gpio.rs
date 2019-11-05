@@ -10,7 +10,7 @@ use crate::{
         GPIO,
     },
 };
-use core::marker::PhantomData;
+use core::{convert::Infallible, marker::PhantomData};
 
 /// Extension trait to use the peripheral bit set and clear feature.
 trait GpioClearSetExt {
@@ -79,7 +79,6 @@ macro_rules! gpios {
                 Parts {
                     $(
                         $field: PinBuilder {
-                            state: false,
                             ty: $type,
                             _pull: PhantomData,
                             _filter: PhantomData,
@@ -215,6 +214,52 @@ gpios!(
     pk2, PK2, pk_model, mode2, pk_dout, pk_douttgl, pk_din, 2;
 );
 
+/// Implemented by types that indicate an GPIO mode.
+///
+/// Used as trait bound by the [`Pin`] type.
+pub trait Mode {}
+
+/// Marks a GPIO pin as being disabled.
+pub struct Disabled;
+impl Mode for Disabled {}
+
+/// Marks a GPIO pin as being configured as input.
+pub struct Input;
+impl Mode for Input {}
+
+/// Marks a GPIO pin as being configured as output.
+pub struct Output;
+impl Mode for Output {}
+
+/// GPIO pin
+///
+/// Use a [`PinBuilder`] to create a pin. To change a pin configuration
+/// use the [`Pin::reset()`] method to get back a builder. The cycle through
+/// disabled mode prevents a pin from entering unwanted intermediate modes.
+pub struct Pin<T: PinTrait, M: Mode> {
+    ty: T,
+    _mode: PhantomData<M>,
+}
+
+impl<T: PinTrait, M: Mode> Pin<T, M> {
+    /// Disables the pin and returns a builder.
+    pub fn reset(mut self) -> PinBuilder<T, Floating, NoFilter> {
+        self.ty.clear_mode();
+
+        // When the pin was configured as output or as input with the glitch
+        // filter enabled the DOUT bit might be set. The DOUT bit enables a
+        // pull up resistor in DISABLED mode. Clear the DOUT bit to disable
+        // the pull-up as soon as possible.
+        self.ty.clear_dout_bit();
+
+        PinBuilder {
+            ty: self.ty,
+            _pull: PhantomData,
+            _filter: PhantomData,
+        }
+    }
+}
+
 // Use a private module to hide those types from the documentation.
 use builder_types::*;
 mod builder_types {
@@ -244,13 +289,12 @@ mod builder_types {
 
 /// Builder type for pins.
 ///
+/// Finalization methods like `input()` or `PinBuilder::push_pull_output()` are
+/// only implemented for configurations that are supported by the hardware.
+///
 /// This can be obtained by accessing a field of [`Parts`] or by calling
 /// [`Pin::reset()`] on an existing pin.
 pub struct PinBuilder<T: PinTrait, P: PullTrait, F: FilterTrait> {
-    // For the initial output state use a regular field to make the code not
-    // even more verbose than it is already.
-    state: bool,
-
     // Use ZST for type state where it makes senses so that the compiler can
     // check if the configuration is valid.
     ty: T,
@@ -262,7 +306,6 @@ impl<T: PinTrait, P: PullTrait, F: FilterTrait> PinBuilder<T, P, F> {
     /// Disables any pull-up or pull-down resistors.
     pub fn floating(self) -> PinBuilder<T, Floating, F> {
         PinBuilder {
-            state: self.state,
             ty: self.ty,
             _pull: PhantomData,
             _filter: PhantomData,
@@ -272,7 +315,6 @@ impl<T: PinTrait, P: PullTrait, F: FilterTrait> PinBuilder<T, P, F> {
     /// Enables a pull-up resistor.
     pub fn pull_up(self) -> PinBuilder<T, PullUp, F> {
         PinBuilder {
-            state: self.state,
             ty: self.ty,
             _pull: PhantomData,
             _filter: PhantomData,
@@ -282,7 +324,6 @@ impl<T: PinTrait, P: PullTrait, F: FilterTrait> PinBuilder<T, P, F> {
     /// Enables a pull-down resistor.
     pub fn pull_pown(self) -> PinBuilder<T, PullDown, F> {
         PinBuilder {
-            state: self.state,
             ty: self.ty,
             _pull: PhantomData,
             _filter: PhantomData,
@@ -292,7 +333,6 @@ impl<T: PinTrait, P: PullTrait, F: FilterTrait> PinBuilder<T, P, F> {
     /// Enables the glitch filter on the input circuitry.
     pub fn filter(self) -> PinBuilder<T, P, Filter> {
         PinBuilder {
-            state: self.state,
             ty: self.ty,
             _pull: PhantomData,
             _filter: PhantomData,
@@ -302,27 +342,6 @@ impl<T: PinTrait, P: PullTrait, F: FilterTrait> PinBuilder<T, P, F> {
     /// Disables the glitch filter on the input circuitry.
     pub fn no_filter(self) -> PinBuilder<T, P, NoFilter> {
         PinBuilder {
-            state: self.state,
-            ty: self.ty,
-            _pull: PhantomData,
-            _filter: PhantomData,
-        }
-    }
-
-    /// Sets an output to high before enabling it.
-    pub fn set_high(self) -> PinBuilder<T, P, F> {
-        PinBuilder {
-            state: true,
-            ty: self.ty,
-            _pull: PhantomData,
-            _filter: PhantomData,
-        }
-    }
-
-    /// Sets an output to high before enabling it.
-    pub fn set_low(self) -> PinBuilder<T, P, F> {
-        PinBuilder {
-            state: false,
             ty: self.ty,
             _pull: PhantomData,
             _filter: PhantomData,
@@ -330,302 +349,205 @@ impl<T: PinTrait, P: PullTrait, F: FilterTrait> PinBuilder<T, P, F> {
     }
 }
 
-/// Implemented by types that indicate an GPIO mode.
-///
-/// Used as trait bound by the [`Pin`] type.
-pub trait Mode {}
-
-/// Marks a GPIO pin as being disabled.
-pub struct Disabled;
-impl Mode for Disabled {}
-
-/// Marks a GPIO pin as being used by a debug connection (SDW or JTAG).
-pub struct Debug;
-impl Mode for Debug {}
-
-/// Marks a GPIO pin as being configured as input.
-pub struct Input;
-impl Mode for Input {}
-
-/// Marks a GPIO pin as being configured as output.
-pub struct Output<OM: OutputMode>(OM);
-impl<OM: OutputMode> Mode for Output<OM> {}
-
-/// Implemented by types that indicate a GPIO output mode.
-///
-/// Used as trait bound by the [`Output`] type.
-pub trait OutputMode {}
-
-/// Marks a GPIO output pin as push-pull.
-pub struct PushPull;
-impl OutputMode for PushPull {}
-
-/// Marks a GPIO output pin as open-source.
-pub struct OpenSource;
-impl OutputMode for OpenSource {}
-
-/// Marks a GPIO output pin as open-drain.
-pub struct OpenDrain;
-impl OutputMode for OpenDrain {}
-
-/// GPIO pin
-// TODO: More documentation
-pub struct Pin<T: PinTrait, M: Mode> {
-    ty: T,
-    _mode: PhantomData<M>,
-}
-
-impl<T, M: Mode> Pin<T, M>
-where
-    T: PinTrait,
-{
-    pub fn reset(mut self) -> PinBuilder<T, Floating, NoFilter> {
-        self.ty.clear_mode();
-
-        // When the pin was configured as output or as input with the glitch
-        // filter enabled the DOUT bit might be set. The DOUT bit enables a
-        // pull up resistor in DISABLED mode. Clear the DOUT bit to disable
-        // the pull-up as soon as possible.
-        self.ty.clear_dout_bit();
-
-        PinBuilder {
-            state: false,
+impl<T: PinTrait> PinBuilder<T, Floating, NoFilter> {
+    /// Disables the digital input and output circuitry for this pin.
+    pub fn disabled(self) -> Pin<T, Disabled> {
+        Pin {
             ty: self.ty,
-            _pull: PhantomData,
-            _filter: PhantomData,
-        }
-    }
-}
-
-impl<T> From<PinBuilder<T, Floating, NoFilter>> for Pin<T, Disabled>
-where
-    T: PinTrait,
-{
-    fn from(pb: PinBuilder<T, Floating, NoFilter>) -> Self {
-        Self {
-            ty: pb.ty,
             _mode: PhantomData,
         }
     }
 }
 
-impl<T> From<PinBuilder<T, PullUp, NoFilter>> for Pin<T, Disabled>
-where
-    T: PinTrait,
-{
-    fn from(mut pb: PinBuilder<T, PullUp, NoFilter>) -> Self {
-        pb.ty.set_dout_bit();
+impl<T: PinTrait> PinBuilder<T, PullUp, NoFilter> {
+    /// Disables the digital input and output circuitry for this pin.
+    pub fn disabled(mut self) -> Pin<T, Disabled> {
+        self.ty.set_dout_bit();
 
-        Self {
-            ty: pb.ty,
+        Pin {
+            ty: self.ty,
             _mode: PhantomData,
         }
     }
 }
 
-impl<T> From<PinBuilder<T, Floating, NoFilter>> for Pin<T, Input>
-where
-    T: PinTrait,
-{
-    fn from(mut pb: PinBuilder<T, Floating, NoFilter>) -> Self {
-        pb.ty.set_mode(MODE::INPUT);
+impl<T: PinTrait> PinBuilder<T, Floating, NoFilter> {
+    /// Configures this pin as digital input.
+    pub fn input(mut self) -> Pin<T, Input> {
+        self.ty.set_mode(MODE::INPUT);
 
-        Self {
-            ty: pb.ty,
+        Pin {
+            ty: self.ty,
             _mode: PhantomData,
         }
     }
 }
 
-impl<T> From<PinBuilder<T, Floating, Filter>> for Pin<T, Input>
-where
-    T: PinTrait,
-{
-    fn from(mut pb: PinBuilder<T, Floating, Filter>) -> Self {
+impl<T: PinTrait> PinBuilder<T, Floating, Filter> {
+    /// Configures this pin as digital input.
+    pub fn input(mut self) -> Pin<T, Input> {
         // Change to INPUT mode first, so that setting the DOUT bit does not
         // accidentally activate the pull-up resistor while still in DISABLED mode.
-        pb.ty.set_mode(MODE::INPUT);
-        pb.ty.set_dout_bit();
+        self.ty.set_mode(MODE::INPUT);
+        self.ty.set_dout_bit();
 
-        Self {
-            ty: pb.ty,
+        Pin {
+            ty: self.ty,
             _mode: PhantomData,
         }
     }
 }
 
-impl<T> From<PinBuilder<T, PullDown, NoFilter>> for Pin<T, Input>
-where
-    T: PinTrait,
-{
-    fn from(mut pb: PinBuilder<T, PullDown, NoFilter>) -> Self {
-        pb.ty.set_mode(MODE::INPUTPULL);
+impl<T: PinTrait> PinBuilder<T, PullDown, NoFilter> {
+    /// Configures this pin as digital input.
+    pub fn input(mut self) -> Pin<T, Input> {
+        self.ty.set_mode(MODE::INPUTPULL);
 
-        Self {
-            ty: pb.ty,
+        Pin {
+            ty: self.ty,
             _mode: PhantomData,
         }
     }
 }
 
-impl<T> From<PinBuilder<T, PullUp, NoFilter>> for Pin<T, Input>
-where
-    T: PinTrait,
-{
-    fn from(mut pb: PinBuilder<T, PullUp, NoFilter>) -> Self {
-        pb.ty.set_dout_bit();
-        pb.ty.set_mode(MODE::INPUTPULL);
+impl<T: PinTrait> PinBuilder<T, PullUp, NoFilter> {
+    /// Configures this pin as digital input.
+    pub fn input(mut self) -> Pin<T, Input> {
+        self.ty.set_dout_bit();
+        self.ty.set_mode(MODE::INPUTPULL);
 
-        Self {
-            ty: pb.ty,
+        Pin {
+            ty: self.ty,
             _mode: PhantomData,
         }
     }
 }
 
-impl<T> From<PinBuilder<T, PullDown, Filter>> for Pin<T, Input>
-where
-    T: PinTrait,
-{
-    fn from(mut pb: PinBuilder<T, PullDown, Filter>) -> Self {
-        pb.ty.set_mode(MODE::INPUTPULLFILTER);
+impl<T: PinTrait> PinBuilder<T, PullDown, Filter> {
+    /// Configures this pin as digital input.
+    pub fn input(mut self) -> Pin<T, Input> {
+        self.ty.set_mode(MODE::INPUTPULLFILTER);
 
-        Self {
-            ty: pb.ty,
+        Pin {
+            ty: self.ty,
             _mode: PhantomData,
         }
     }
 }
 
-impl<T> From<PinBuilder<T, PullUp, Filter>> for Pin<T, Input>
-where
-    T: PinTrait,
-{
-    fn from(mut pb: PinBuilder<T, PullUp, Filter>) -> Self {
-        pb.ty.set_dout_bit();
-        pb.ty.set_mode(MODE::INPUTPULLFILTER);
+impl<T: PinTrait> PinBuilder<T, PullUp, Filter> {
+    /// Configures this pin as digital input.
+    pub fn input(mut self) -> Pin<T, Input> {
+        self.ty.set_dout_bit();
+        self.ty.set_mode(MODE::INPUTPULLFILTER);
 
-        Self {
-            ty: pb.ty,
+        Pin {
+            ty: self.ty,
             _mode: PhantomData,
         }
     }
 }
 
-impl<T> From<PinBuilder<T, Floating, NoFilter>> for Pin<T, Output<PushPull>>
-where
-    T: PinTrait,
-{
-    fn from(mut pb: PinBuilder<T, Floating, NoFilter>) -> Self {
-        if pb.state {
-            pb.ty.set_dout_bit();
+impl<T: PinTrait> PinBuilder<T, Floating, NoFilter> {
+    /// Configures this pin as push-pull output.
+    pub fn push_pull_output(mut self, state: bool) -> Pin<T, Output> {
+        if state {
+            self.ty.set_dout_bit();
         }
-        pb.ty.set_mode(MODE::PUSHPULL);
+        self.ty.set_mode(MODE::PUSHPULL);
 
-        Self {
-            ty: pb.ty,
+        Pin {
+            ty: self.ty,
             _mode: PhantomData,
         }
     }
 }
 
-impl<T> From<PinBuilder<T, Floating, NoFilter>> for Pin<T, Output<OpenSource>>
-where
-    T: PinTrait,
-{
-    fn from(mut pb: PinBuilder<T, Floating, NoFilter>) -> Self {
-        pb.ty.set_mode(MODE::WIREDOR);
-        if pb.state {
-            pb.ty.set_dout_bit();
+impl<T: PinTrait> PinBuilder<T, Floating, NoFilter> {
+    /// Configures this pin as open-source output.
+    pub fn open_source_output(mut self, state: bool) -> Pin<T, Output> {
+        self.ty.set_mode(MODE::WIREDOR);
+        if state {
+            self.ty.set_dout_bit();
         }
 
-        Self {
-            ty: pb.ty,
+        Pin {
+            ty: self.ty,
             _mode: PhantomData,
         }
     }
 }
 
-impl<T> From<PinBuilder<T, PullDown, NoFilter>> for Pin<T, Output<OpenSource>>
-where
-    T: PinTrait,
-{
-    fn from(mut pb: PinBuilder<T, PullDown, NoFilter>) -> Self {
-        pb.ty.set_mode(MODE::WIREDORPULLDOWN);
-        if pb.state {
-            pb.ty.set_dout_bit();
+impl<T: PinTrait> PinBuilder<T, PullDown, NoFilter> {
+    /// Configures this pin as open-source output.
+    pub fn open_source_output(mut self, state: bool) -> Pin<T, Output> {
+        self.ty.set_mode(MODE::WIREDORPULLDOWN);
+        if state {
+            self.ty.set_dout_bit();
         }
 
-        Self {
-            ty: pb.ty,
+        Pin {
+            ty: self.ty,
             _mode: PhantomData,
         }
     }
 }
 
-impl<T> From<PinBuilder<T, Floating, NoFilter>> for Pin<T, Output<OpenDrain>>
-where
-    T: PinTrait,
-{
-    fn from(mut pb: PinBuilder<T, Floating, NoFilter>) -> Self {
-        if pb.state {
-            pb.ty.set_dout_bit();
+impl<T: PinTrait> PinBuilder<T, Floating, NoFilter> {
+    /// Configures this pin as open-drain output.
+    pub fn open_drain_output(mut self, state: bool) -> Pin<T, Output> {
+        if state {
+            self.ty.set_dout_bit();
         }
-        pb.ty.set_mode(MODE::WIREDAND);
+        self.ty.set_mode(MODE::WIREDAND);
 
-        Self {
-            ty: pb.ty,
+        Pin {
+            ty: self.ty,
             _mode: PhantomData,
         }
     }
 }
 
-impl<T> From<PinBuilder<T, Floating, Filter>> for Pin<T, Output<OpenDrain>>
-where
-    T: PinTrait,
-{
-    fn from(mut pb: PinBuilder<T, Floating, Filter>) -> Self {
-        if pb.state {
-            pb.ty.set_dout_bit();
+impl<T: PinTrait> PinBuilder<T, Floating, Filter> {
+    /// Configures this pin as open-drain output.
+    pub fn open_drain_output(mut self, state: bool) -> Pin<T, Output> {
+        if state {
+            self.ty.set_dout_bit();
         }
-        pb.ty.set_mode(MODE::WIREDANDFILTER);
+        self.ty.set_mode(MODE::WIREDANDFILTER);
 
-        Self {
-            ty: pb.ty,
+        Pin {
+            ty: self.ty,
             _mode: PhantomData,
         }
     }
 }
 
-impl<T> From<PinBuilder<T, PullUp, NoFilter>> for Pin<T, Output<OpenDrain>>
-where
-    T: PinTrait,
-{
-    fn from(mut pb: PinBuilder<T, PullUp, NoFilter>) -> Self {
-        if pb.state {
-            pb.ty.set_dout_bit();
+impl<T: PinTrait> PinBuilder<T, PullUp, NoFilter> {
+    /// Configures this pin as open-drain output.
+    pub fn open_drain_output(mut self, state: bool) -> Pin<T, Output> {
+        if state {
+            self.ty.set_dout_bit();
         }
-        pb.ty.set_mode(MODE::WIREDANDPULLUP);
+        self.ty.set_mode(MODE::WIREDANDPULLUP);
 
-        Self {
-            ty: pb.ty,
+        Pin {
+            ty: self.ty,
             _mode: PhantomData,
         }
     }
 }
 
-impl<T> From<PinBuilder<T, PullUp, Filter>> for Pin<T, Output<OpenDrain>>
-where
-    T: PinTrait,
-{
-    fn from(mut pb: PinBuilder<T, PullUp, Filter>) -> Self {
-        if pb.state {
-            pb.ty.set_dout_bit();
+impl<T: PinTrait> PinBuilder<T, PullUp, Filter> {
+    /// Configures this pin as open-drain output.
+    pub fn open_drain_output(mut self, state: bool) -> Pin<T, Output> {
+        if state {
+            self.ty.set_dout_bit();
         }
-        pb.ty.set_mode(MODE::WIREDANDPULLUPFILTER);
+        self.ty.set_mode(MODE::WIREDANDPULLUPFILTER);
 
-        Self {
-            ty: pb.ty,
+        Pin {
+            ty: self.ty,
             _mode: PhantomData,
         }
     }
@@ -635,14 +557,14 @@ where
 /// Leaked because it is used as trait bound. Not relevant for the user.
 pub trait InputAvailable {}
 impl InputAvailable for Input {}
-impl<OM: OutputMode> InputAvailable for Output<OM> {}
+impl InputAvailable for Output {}
 
 impl<T, M> InputPin for Pin<T, M>
 where
     T: PinTrait,
     M: Mode + InputAvailable,
 {
-    type Error = ();
+    type Error = Infallible;
 
     fn is_low(&self) -> Result<bool, Self::Error> {
         Ok(!self.ty.read_din_bit())
@@ -653,12 +575,8 @@ where
     }
 }
 
-impl<T, OM> OutputPin for Pin<T, Output<OM>>
-where
-    T: PinTrait,
-    OM: OutputMode,
-{
-    type Error = ();
+impl<T: PinTrait> OutputPin for Pin<T, Output> {
+    type Error = Infallible;
 
     fn set_low(&mut self) -> Result<(), Self::Error> {
         self.ty.clear_dout_bit();
@@ -671,11 +589,7 @@ where
     }
 }
 
-impl<T, OM> StatefulOutputPin for Pin<T, Output<OM>>
-where
-    T: PinTrait,
-    OM: OutputMode,
-{
+impl<T: PinTrait> StatefulOutputPin for Pin<T, Output> {
     fn is_set_low(&self) -> Result<bool, Self::Error> {
         Ok(!self.ty.read_dout_bit())
     }
@@ -685,12 +599,8 @@ where
     }
 }
 
-impl<T, OM> ToggleableOutputPin for Pin<T, Output<OM>>
-where
-    T: PinTrait,
-    OM: OutputMode,
-{
-    type Error = ();
+impl<T: PinTrait> ToggleableOutputPin for Pin<T, Output> {
+    type Error = Infallible;
 
     fn toggle(&mut self) -> Result<(), Self::Error> {
         self.ty.write_douttgl_bit();
