@@ -1,5 +1,5 @@
 //! Clock Managened Unit (CMU) API
-use crate::pac::{CMU, GPIO};
+use crate::pac::*;
 
 pub trait CmuExt {
     fn freeze(self) -> Cmu;
@@ -38,4 +38,30 @@ macro_rules! impl_clock_control_ext {
     };
 }
 
+impl_clock_control_ext!(CRYPTO0, hfbusclken0, crypto0);
+impl_clock_control_ext!(CRYPTO1, hfbusclken0, crypto1);
+// TODO: Enable this to access the register of LF peripherals.
+// impl_clock_control_ext!(???, hfbusclken0, le);
 impl_clock_control_ext!(GPIO, hfbusclken0, gpio);
+impl_clock_control_ext!(PRS, hfbusclken0, prs);
+impl_clock_control_ext!(LDMA, hfbusclken0, ldma);
+impl_clock_control_ext!(GPCRC, hfbusclken0, gpcrc);
+
+impl_clock_control_ext!(TIMER0, hfperclken0, timer0);
+impl_clock_control_ext!(TIMER1, hfperclken0, timer1);
+impl_clock_control_ext!(WTIMER0, hfperclken0, wtimer0);
+impl_clock_control_ext!(WTIMER1, hfperclken0, wtimer1);
+impl_clock_control_ext!(USART0, hfperclken0, usart0);
+impl_clock_control_ext!(USART1, hfperclken0, usart1);
+impl_clock_control_ext!(USART2, hfperclken0, usart2);
+impl_clock_control_ext!(USART3, hfperclken0, usart3);
+impl_clock_control_ext!(I2C0, hfperclken0, i2c0);
+impl_clock_control_ext!(I2C1, hfperclken0, i2c1);
+impl_clock_control_ext!(ACMP0, hfperclken0, acmp0);
+impl_clock_control_ext!(ACMP1, hfperclken0, acmp1);
+impl_clock_control_ext!(CRYOTIMER, hfperclken0, cryotimer);
+impl_clock_control_ext!(ADC0, hfperclken0, adc0);
+impl_clock_control_ext!(IDAC0, hfperclken0, idac0);
+impl_clock_control_ext!(VDAC0, hfperclken0, vdac0);
+impl_clock_control_ext!(CSEN, hfperclken0, csen);
+impl_clock_control_ext!(TRNG0, hfperclken0, trng0);
