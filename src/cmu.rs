@@ -8,15 +8,37 @@ pub trait CmuExt {
 impl CmuExt for CMU {
     // TODO: Make this configurable
     fn freeze(self) -> Cmu {
-        Cmu { raw: self }
+        Cmu {
+            raw: self,
+            hfclk: 19_000_000,
+        }
     }
 }
 
 pub struct Cmu {
     raw: CMU,
+    hfclk: u32,
 }
 
 impl Cmu {
+    /// This clock drives the Core Modules, which consists of the CPU and modules
+    /// that are tightly coupled to the CPU, e.g. the cache.
+    pub fn hfcoreclk(&self) -> u32 {
+        self.hfclk / (self.raw.hfcorepresc.read().bits() + 1)
+    }
+
+    /// This clock drives the Bus and Memory System. It is also used to drive the
+    /// bus interface to the Low Energy Peripherals.
+    pub fn hfbusclk(&self) -> u32 {
+        self.hfclk
+    }
+
+    /// This clock drives the High-Frequency Peripherals.
+    pub fn hfperclk(&self) -> u32 {
+        self.hfclk / (self.raw.hfperpresc.read().bits() + 1)
+    }
+
+    /// Enables all clocks required to use a peripheral.
     pub fn enable_clock(&mut self, peripheral: &impl ClockControlExt) {
         peripheral.enable_clock(self);
     }
