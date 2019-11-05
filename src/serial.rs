@@ -11,9 +11,9 @@ use crate::{
 use core::{convert::Infallible, ops::Deref};
 use nb;
 
-pub struct Usart<U: Peripheral>(U);
+pub struct Serial<U: UsartX>(U);
 
-impl<U: Peripheral> Usart<U> {
+impl<U: UsartX> Serial<U> {
     pub fn new<TX, RX>(usart: U, _tx: TX, _rx: RX, cmu: &mut Cmu) -> Self
     where
         TX: TxPin<U>,
@@ -52,7 +52,7 @@ pub enum Error {
     Parity,
 }
 
-impl<U: Peripheral> Read<u8> for Usart<U> {
+impl<U: UsartX> Read<u8> for Serial<U> {
     type Error = Error;
 
     fn read(&mut self) -> nb::Result<u8, Self::Error> {
@@ -72,7 +72,7 @@ impl<U: Peripheral> Read<u8> for Usart<U> {
     }
 }
 
-impl<U: Peripheral> Write<u8> for Usart<U> {
+impl<U: UsartX> Write<u8> for Serial<U> {
     type Error = Infallible;
 
     fn write(&mut self, word: u8) -> nb::Result<(), Self::Error> {
@@ -93,14 +93,14 @@ impl<U: Peripheral> Write<u8> for Usart<U> {
     }
 }
 
-impl<U: Peripheral> BlockingWriteDefault<u8> for Usart<U> {}
+impl<U: UsartX> BlockingWriteDefault<u8> for Serial<U> {}
 
-pub trait Peripheral: Deref<Target = RegisterBlock> + ClockControlExt {}
+pub trait UsartX: Deref<Target = RegisterBlock> + ClockControlExt {}
 
-impl Peripheral for USART0 {}
-impl Peripheral for USART1 {}
-impl Peripheral for USART2 {}
-impl Peripheral for USART3 {}
+impl UsartX for USART0 {}
+impl UsartX for USART1 {}
+impl UsartX for USART2 {}
+impl UsartX for USART3 {}
 
 macro_rules! impl_pin {
     ($PIN_TRAIT:ty, $PIN_MODE:ty, {$($PIN:ty: $loc:expr,)*}) => {
@@ -112,7 +112,7 @@ macro_rules! impl_pin {
     }
 }
 
-pub trait TxPin<U: Peripheral> {
+pub trait TxPin<U: UsartX> {
     const LOCATION: u8;
 }
 
@@ -259,7 +259,7 @@ impl_pin!(TxPin<USART3>, Output, {
     PK2: 31,
 });
 
-pub trait RxPin<U: Peripheral> {
+pub trait RxPin<U: UsartX> {
     const LOCATION: u8;
 }
 
