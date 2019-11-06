@@ -1,12 +1,12 @@
 //! General purpose I/O (GPIO) pin API
 use crate::{
+    cmu::Cmu,
     hal::digital::v2::{InputPin, OutputPin, StatefulOutputPin, ToggleableOutputPin},
     pac::{
         // Each GPIO has it’s own enum for the mode field even though the values are
         // shared by all GPIOs. Import the first to have nice names for the numeric
         // constants and use the provided u8 conversion to erase type information.
         gpio::{pa_model::MODE0_A as MODE, RegisterBlock},
-        CMU,
         GPIO,
     },
 };
@@ -41,7 +41,7 @@ impl GpioClearSetExt for GPIO {
 /// Extension trait to split the GPIO register block into individual GPIO pins.
 pub trait GpioExt {
     /// Splits the GPIO register block into individual GPIO pins.
-    fn split(self, cmu: &mut CMU) -> Parts;
+    fn split(self, cmu: &mut Cmu) -> Parts;
 }
 
 /// Internal trait to abstract away raw register manipulation.
@@ -73,8 +73,8 @@ macro_rules! gpios {
         }
 
         impl GpioExt for GPIO {
-            fn split(self, cmu: &mut CMU) -> Parts {
-                cmu.hfbusclken0.modify(|_, w| w.gpio().set_bit());
+            fn split(self, cmu: &mut Cmu) -> Parts {
+                cmu.enable_clock(&self);
 
                 Parts {
                     $(
