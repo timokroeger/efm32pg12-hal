@@ -1,4 +1,5 @@
 //! Serial API
+pub use crate::pac::usart0::frame::{PARITY_A as Parity, STOPBITS_A as StopBits};
 use crate::{
     cmu::{ClockControlExt, Cmu},
     gpio::*,
@@ -11,21 +12,44 @@ use crate::{
 use core::{convert::Infallible, ops::Deref};
 use nb;
 
+pub struct Config {
+    /// Baudrate in bps
+    baudrate: u32,
+    parity: Parity,
+    stop_bits: StopBits,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            baudrate: 115200,
+            parity: Parity::NONE,
+            stop_bits: StopBits::ONE,
+        }
+    }
+}
+
 pub struct Serial<U: UsartX>(U);
 
 impl<U: UsartX> Serial<U> {
-    pub fn new<TX, RX>(usart: U, _tx: TX, _rx: RX, cmu: &mut Cmu) -> Self
+    pub fn new<TX, RX>(usart: U, _tx: TX, _rx: RX, config: &Config, cmu: &mut Cmu) -> Self
     where
         TX: TxPin<U>,
         RX: RxPin<U>,
     {
         cmu.enable_clock(&usart);
 
-        // The default configuration of 8 data bits, 1 stop bit and no parity is ok for now
-        let baudrate = 115200;
+        usart.frame.modify(|_, w| {
+            w.parity()
+                .variant(config.parity)
+                .stopbits()
+                .variant(config.stop_bits)
+        });
+
         let ovs = 16;
-        let clkdiv = 32 * cmu.hfperclk() / (ovs * baudrate) - 32;
-        usart.clkdiv.write(|w| unsafe { w.div().bits(clkdiv) });
+        let clkdiv = 32 * cmu.hfperclk() / (ovs * config.baudrate) - 32;
+        // TODO: Check accuracy of clock and lower OVS if it is off by too much.
+        usart.clkdiv.modify(|_, w| unsafe { w.div().bits(clkdiv) });
 
         // Route peripheral to pins.
         usart
