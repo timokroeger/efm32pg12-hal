@@ -12,8 +12,11 @@ use crate::{
 use core::{convert::Infallible, ops::Deref};
 use nb;
 
+/// Serial configuration.
+///
+/// Defaults to 115200bps, 8 data bits, no parity and 1 stop bit.
 pub struct Config {
-    /// Baudrate in bps
+    /// Baudrate in bps.
     baudrate: u32,
     parity: Parity,
     stop_bits: StopBits,
@@ -29,6 +32,7 @@ impl Default for Config {
     }
 }
 
+/// Serial interface for a USART instance.
 pub struct Serial<U: UsartX>(U);
 
 impl<U: UsartX> Serial<U> {
@@ -65,6 +69,7 @@ impl<U: UsartX> Serial<U> {
     }
 }
 
+/// Serial error
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Error {
     /// The stop bit was sampled to a value of 0.
@@ -119,6 +124,7 @@ impl<U: UsartX> Write<u8> for Serial<U> {
 
 impl<U: UsartX> BlockingWriteDefault<u8> for Serial<U> {}
 
+/// Internal trait used to implement the serial API for PAC USART instances.
 pub trait UsartX: Deref<Target = RegisterBlock> + ClockControlExt {}
 
 impl UsartX for USART0 {}
@@ -136,6 +142,7 @@ macro_rules! impl_pin {
     }
 }
 
+/// Implemented by pin types that can be configured as USART TX pin.
 pub trait TxPin<U: UsartX> {
     const LOCATION: u8;
 }
@@ -283,6 +290,7 @@ impl_pin!(TxPin<USART3>, Output, {
     PK2: 31,
 });
 
+/// Implemented by pin types that can be configured as USART RX pin.
 pub trait RxPin<U: UsartX> {
     const LOCATION: u8;
 }
