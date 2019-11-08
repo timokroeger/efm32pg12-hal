@@ -132,22 +132,12 @@ impl UsartX for USART1 {}
 impl UsartX for USART2 {}
 impl UsartX for USART3 {}
 
-macro_rules! impl_pin {
-    ($PIN_TRAIT:ty, $PIN_MODE:ty, {$($PIN:ty: $loc:expr,)*}) => {
-        $(
-            impl $PIN_TRAIT for Pin<$PIN, $PIN_MODE> {
-                const LOCATION: u8 = $loc;
-            }
-        )*
-    }
-}
-
 /// Implemented by pin types that can be configured as USART TX pin.
 pub trait TxPin<U: UsartX> {
     const LOCATION: u8;
 }
 
-impl_pin!(TxPin<USART0>, Output, {
+impl_pin_trait!(TxPin<USART0>, Output, {
     PA0: 0,
     PA1: 1,
     PA2: 2,
@@ -183,7 +173,7 @@ impl_pin!(TxPin<USART0>, Output, {
     PF7: 31,
 });
 
-impl_pin!(TxPin<USART1>, Output, {
+impl_pin_trait!(TxPin<USART1>, Output, {
     PA0: 0,
     PA1: 1,
     PA2: 2,
@@ -219,7 +209,7 @@ impl_pin!(TxPin<USART1>, Output, {
     PF7: 31,
 });
 
-impl_pin!(TxPin<USART2>, Output, {
+impl_pin_trait!(TxPin<USART2>, Output, {
     PA5: 0,
     PA6: 1,
     PA7: 2,
@@ -255,7 +245,7 @@ impl_pin!(TxPin<USART2>, Output, {
     PK2: 31,
 });
 
-impl_pin!(TxPin<USART3>, Output, {
+impl_pin_trait!(TxPin<USART3>, Output, {
     PD8: 0,
     PD9: 1,
     PD10: 2,
@@ -295,7 +285,7 @@ pub trait RxPin<U: UsartX> {
     const LOCATION: u8;
 }
 
-impl_pin!(RxPin<USART0>, Input, {
+impl_pin_trait!(RxPin<USART0>, Input, {
     PA1: 0,
     PA2: 1,
     PA3: 2,
@@ -331,7 +321,7 @@ impl_pin!(RxPin<USART0>, Input, {
     PA0: 31,
 });
 
-impl_pin!(RxPin<USART1>, Input, {
+impl_pin_trait!(RxPin<USART1>, Input, {
     PA1: 0,
     PA2: 1,
     PA3: 2,
@@ -367,7 +357,7 @@ impl_pin!(RxPin<USART1>, Input, {
     PA0: 31,
 });
 
-impl_pin!(RxPin<USART2>, Input, {
+impl_pin_trait!(RxPin<USART2>, Input, {
     PA6: 0,
     PA7: 1,
     PA8: 2,
@@ -403,7 +393,7 @@ impl_pin!(RxPin<USART2>, Input, {
     PA5: 31,
 });
 
-impl_pin!(RxPin<USART3>, Input, {
+impl_pin_trait!(RxPin<USART3>, Input, {
     PD9: 0,
     PD10: 1,
     PD11: 2,

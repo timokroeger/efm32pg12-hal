@@ -607,3 +607,15 @@ impl<T: PinTrait> ToggleableOutputPin for Pin<T, Output> {
         Ok(())
     }
 }
+
+/// Internal macro to implements a trait for all pins of a specific mode.
+#[macro_export]
+macro_rules! impl_pin_trait {
+    ($PIN_TRAIT:ty, $PIN_MODE:ty, {$($PIN:ty: $loc:expr,)*}) => {
+        $(
+            impl $PIN_TRAIT for Pin<$PIN, $PIN_MODE> {
+                const LOCATION: u8 = $loc;
+            }
+        )*
+    }
+}
