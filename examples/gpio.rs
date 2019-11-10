@@ -1,13 +1,9 @@
 #![no_std]
 #![no_main]
 
-use efm32pg12_hal as hal;
-
-extern crate panic_itm;
-
 use cortex_m_rt::entry;
-use hal::{pac::Peripherals, prelude::*};
-
+use efm32pg12_hal::{pac::Peripherals, prelude::*};
+use panic_abort as _;
 #[entry]
 fn main() -> ! {
     let peripherals = Peripherals::take().unwrap();
