@@ -12,6 +12,7 @@ pub mod prelude {
     pub use crate::{
         cmu::CmuExt as _,
         gpio::GpioExt as _,
+        serial::UsartExt as _,
         hal::{digital::v2::*, prelude::*},
     };
 }

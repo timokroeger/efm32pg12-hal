@@ -32,18 +32,22 @@ impl Default for Config {
     }
 }
 
-/// Serial interface for a USART instance.
-pub struct Serial<I: Instance>(I);
+pub trait UsartExt<I: Instance> {
+    fn split<TX, RX>(self, _tx: TX, _rx: RX, config: &Config, cmu: &mut Cmu) -> Serial<I>
+    where
+        TX: TxPin<I>,
+        RX: RxPin<I>;
+}
 
-impl<I: Instance> Serial<I> {
-    pub fn new<TX, RX>(usart: I, _tx: TX, _rx: RX, config: &Config, cmu: &mut Cmu) -> Self
+impl<I: Instance> UsartExt<I> for I {
+    fn split<TX, RX>(self, _tx: TX, _rx: RX, config: &Config, cmu: &mut Cmu) -> Serial<I>
     where
         TX: TxPin<I>,
         RX: RxPin<I>,
     {
-        cmu.enable_clock(&usart);
+        cmu.enable_clock(&self);
 
-        usart.frame.modify(|_, w| {
+        self.frame.modify(|_, w| {
             w.parity()
                 .variant(config.parity)
                 .stopbits()
@@ -53,21 +57,22 @@ impl<I: Instance> Serial<I> {
         let ovs = 16;
         let clkdiv = 32 * cmu.hfperclk() / (ovs * config.baudrate) - 32;
         // TODO: Check accuracy of clock and lower OVS if it is off by too much.
-        usart.clkdiv.modify(|_, w| unsafe { w.div().bits(clkdiv) });
+        self.clkdiv.modify(|_, w| unsafe { w.div().bits(clkdiv) });
 
         // Route peripheral to pins.
-        usart
-            .routeloc0
+        self.routeloc0
             .write(|w| unsafe { w.txloc().bits(TX::LOCATION).rxloc().bits(RX::LOCATION) });
-        usart
-            .routepen
+        self.routepen
             .write(|w| w.txpen().set_bit().rxpen().set_bit());
 
-        usart.cmd.write(|w| w.txen().set_bit().rxen().set_bit());
+        self.cmd.write(|w| w.txen().set_bit().rxen().set_bit());
 
-        Self(usart)
+        Serial(self)
     }
 }
+
+/// Serial interface for a USART instance.
+pub struct Serial<I: Instance>(I);
 
 /// Serial error
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
