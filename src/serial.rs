@@ -33,13 +33,13 @@ impl Default for Config {
 }
 
 /// Serial interface for a USART instance.
-pub struct Serial<U: UsartX>(U);
+pub struct Serial<I: Instance>(I);
 
-impl<U: UsartX> Serial<U> {
-    pub fn new<TX, RX>(usart: U, _tx: TX, _rx: RX, config: &Config, cmu: &mut Cmu) -> Self
+impl<I: Instance> Serial<I> {
+    pub fn new<TX, RX>(usart: I, _tx: TX, _rx: RX, config: &Config, cmu: &mut Cmu) -> Self
     where
-        TX: TxPin<U>,
-        RX: RxPin<U>,
+        TX: TxPin<I>,
+        RX: RxPin<I>,
     {
         cmu.enable_clock(&usart);
 
@@ -81,7 +81,7 @@ pub enum Error {
     Parity,
 }
 
-impl<U: UsartX> Read<u8> for Serial<U> {
+impl<I: Instance> Read<u8> for Serial<I> {
     type Error = Error;
 
     fn read(&mut self) -> nb::Result<u8, Self::Error> {
@@ -101,7 +101,7 @@ impl<U: UsartX> Read<u8> for Serial<U> {
     }
 }
 
-impl<U: UsartX> Write<u8> for Serial<U> {
+impl<I: Instance> Write<u8> for Serial<I> {
     type Error = Infallible;
 
     fn write(&mut self, word: u8) -> nb::Result<(), Self::Error> {
@@ -122,18 +122,18 @@ impl<U: UsartX> Write<u8> for Serial<U> {
     }
 }
 
-impl<U: UsartX> BlockingWriteDefault<u8> for Serial<U> {}
+impl<I: Instance> BlockingWriteDefault<u8> for Serial<I> {}
 
 /// Internal trait used to implement the serial API for PAC USART instances.
-pub trait UsartX: Deref<Target = RegisterBlock> + ClockControlExt {}
+pub trait Instance: Deref<Target = RegisterBlock> + ClockControlExt {}
 
-impl UsartX for USART0 {}
-impl UsartX for USART1 {}
-impl UsartX for USART2 {}
-impl UsartX for USART3 {}
+impl Instance for USART0 {}
+impl Instance for USART1 {}
+impl Instance for USART2 {}
+impl Instance for USART3 {}
 
 /// Implemented by pin types that can be configured as USART TX pin.
-pub trait TxPin<U: UsartX> {
+pub trait TxPin<I: Instance> {
     const LOCATION: u8;
 }
 
@@ -281,7 +281,7 @@ impl_pin_trait!(TxPin<USART3>, Output, {
 });
 
 /// Implemented by pin types that can be configured as USART RX pin.
-pub trait RxPin<U: UsartX> {
+pub trait RxPin<I: Instance> {
     const LOCATION: u8;
 }
 
