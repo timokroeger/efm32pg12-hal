@@ -1,4 +1,4 @@
-//! Serial API
+//! Serial API for the USART peripheral
 pub use crate::pac::usart0::frame::{PARITY_A as Parity, STOPBITS_A as StopBits};
 use crate::{
     cmu::{ClockControlExt, Cmu},

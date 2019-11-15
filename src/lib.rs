@@ -7,12 +7,12 @@ pub mod cmu;
 #[macro_use]
 pub mod gpio;
 pub mod i2c;
-pub mod serial;
+pub mod usart;
 pub mod prelude {
     pub use crate::{
         cmu::CmuExt as _,
         gpio::GpioExt as _,
         hal::{digital::v2::*, prelude::*},
-        serial::UsartExt as _,
+        usart::UsartExt as _,
     };
 }

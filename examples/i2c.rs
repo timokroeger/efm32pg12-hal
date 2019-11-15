@@ -3,7 +3,7 @@
 
 use core::fmt::Write;
 use cortex_m_rt::entry;
-use efm32pg12_hal::{i2c::I2c, pac::Peripherals, prelude::*, serial::Config as SerialConfig};
+use efm32pg12_hal::{i2c::I2c, pac::Peripherals, prelude::*, usart::Config as SerialConfig};
 use heapless::{consts::U18, String};
 use panic_abort as _;
 

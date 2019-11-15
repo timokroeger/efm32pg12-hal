@@ -2,7 +2,7 @@
 #![no_main]
 
 use cortex_m_rt::entry;
-use efm32pg12_hal::{pac::Peripherals, prelude::*, serial::Config};
+use efm32pg12_hal::{pac::Peripherals, prelude::*, usart::Config};
 use nb::block;
 use panic_abort as _;
 
