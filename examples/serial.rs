@@ -23,14 +23,14 @@ fn main() -> ! {
     // The peripheral can easily be changed to USART1.
     // For USART2 or USART3 there is an compiler error because the selected
     // pins are not supported by these peripheral instances.
-    let mut serial = peripherals
+    let (mut tx, mut rx) = peripherals
         .USART0
         .split(tx_pin, rx_pin, &Config::default(), &mut cmu);
 
     // Echo back each received byte.
     loop {
-        if let Ok(b) = block!(serial.read()) {
-            block!(serial.write(b)).ok();
+        if let Ok(b) = block!(rx.read()) {
+            block!(tx.write(b)).ok();
         }
     }
 }

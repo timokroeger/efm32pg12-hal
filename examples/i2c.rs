@@ -20,7 +20,7 @@ fn main() -> ! {
     let _vcom_enable = gpio.pa5.push_pull_output(true);
     let tx_pin = gpio.pa0.push_pull_output(true);
     let rx_pin = gpio.pa1.input();
-    let mut serial = peripherals
+    let (mut tx, _) = peripherals
         .USART0
         .split(tx_pin, rx_pin, &SerialConfig::default(), &mut cmu);
 
@@ -55,9 +55,9 @@ fn main() -> ! {
                     humidity % 100
                 )
                 .unwrap();
-                serial.bwrite_all(line.as_bytes()).ok();
+                tx.bwrite_all(line.as_bytes()).ok();
             } else {
-                serial.bwrite_all(b"error\n").ok();
+                tx.bwrite_all(b"error\n").ok();
             }
         }
         prev_button_state = button_state;

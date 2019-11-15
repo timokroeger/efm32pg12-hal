@@ -9,7 +9,7 @@ use crate::{
     },
     pac::{usart0::RegisterBlock, USART0, USART1, USART2, USART3},
 };
-use core::{convert::Infallible, ops::Deref};
+use core::{convert::Infallible, marker::PhantomData, ops::Deref};
 use nb;
 
 /// Serial configuration.
@@ -33,14 +33,14 @@ impl Default for Config {
 }
 
 pub trait UsartExt<I: Instance> {
-    fn split<TX, RX>(self, _tx: TX, _rx: RX, config: &Config, cmu: &mut Cmu) -> Serial<I>
+    fn split<TX, RX>(self, _tx: TX, _rx: RX, config: &Config, cmu: &mut Cmu) -> (Tx<I>, Rx<I>)
     where
         TX: TxPin<I>,
         RX: RxPin<I>;
 }
 
 impl<I: Instance> UsartExt<I> for I {
-    fn split<TX, RX>(self, _tx: TX, _rx: RX, config: &Config, cmu: &mut Cmu) -> Serial<I>
+    fn split<TX, RX>(self, _tx: TX, _rx: RX, config: &Config, cmu: &mut Cmu) -> (Tx<I>, Rx<I>)
     where
         TX: TxPin<I>,
         RX: RxPin<I>,
@@ -67,12 +67,40 @@ impl<I: Instance> UsartExt<I> for I {
 
         self.cmd.write(|w| w.txen().set_bit().rxen().set_bit());
 
-        Serial(self)
+        (Tx(PhantomData), Rx(PhantomData))
     }
 }
 
-/// Serial interface for a USART instance.
-pub struct Serial<I: Instance>(I);
+/// Transmit part of the serial interface for a USART instance.
+pub struct Tx<I: Instance>(PhantomData<I>);
+
+impl<I: Instance> Write<u8> for Tx<I> {
+    type Error = Infallible;
+
+    fn write(&mut self, word: u8) -> nb::Result<(), Self::Error> {
+        let usart = unsafe { I::steal() };
+        if usart.status.read().txbl().bit() {
+            usart.txdata.write(|w| unsafe { w.txdata().bits(word) });
+            Ok(())
+        } else {
+            Err(nb::Error::WouldBlock)
+        }
+    }
+
+    fn flush(&mut self) -> nb::Result<(), Self::Error> {
+        let usart = unsafe { I::steal() };
+        if usart.status.read().txidle().bit() {
+            Ok(())
+        } else {
+            Err(nb::Error::WouldBlock)
+        }
+    }
+}
+
+impl<I: Instance> BlockingWriteDefault<u8> for Tx<I> {}
+
+/// Receive part of the serial interface for a USART instance.
+pub struct Rx<I: Instance>(PhantomData<I>);
 
 /// Serial error
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -86,15 +114,16 @@ pub enum Error {
     Parity,
 }
 
-impl<I: Instance> Read<u8> for Serial<I> {
+impl<I: Instance> Read<u8> for Rx<I> {
     type Error = Error;
 
     fn read(&mut self) -> nb::Result<u8, Self::Error> {
-        if self.0.status.read().rxdatav().bit_is_clear() {
+        let usart = unsafe { I::steal() };
+        if usart.status.read().rxdatav().bit_is_clear() {
             return Err(nb::Error::WouldBlock);
         }
 
-        let rxdatax = self.0.rxdatax.read();
+        let rxdatax = usart.rxdatax.read();
         if rxdatax.ferr().bit_is_set() {
             return Err(nb::Error::Other(Error::Framing));
         }
@@ -106,36 +135,30 @@ impl<I: Instance> Read<u8> for Serial<I> {
     }
 }
 
-impl<I: Instance> Write<u8> for Serial<I> {
-    type Error = Infallible;
-
-    fn write(&mut self, word: u8) -> nb::Result<(), Self::Error> {
-        if self.0.status.read().txbl().bit() {
-            self.0.txdata.write(|w| unsafe { w.txdata().bits(word) });
-            Ok(())
-        } else {
-            Err(nb::Error::WouldBlock)
-        }
-    }
-
-    fn flush(&mut self) -> nb::Result<(), Self::Error> {
-        if self.0.status.read().txidle().bit() {
-            Ok(())
-        } else {
-            Err(nb::Error::WouldBlock)
-        }
-    }
+/// Internal trait used to implement the serial API for PAC USART instances.
+pub trait Instance: Deref<Target = RegisterBlock> + ClockControlExt {
+    // RTFM does not like long lived references.
+    // Instead the `steal()` method can be used to obtain multiple *aliasing*
+    // references to the registers of a single peripheral. Care must be taken
+    // to not use read-modify-write operations on registers that are shared
+    // by multiple references.
+    unsafe fn steal() -> &'static RegisterBlock;
 }
 
-impl<I: Instance> BlockingWriteDefault<u8> for Serial<I> {}
+macro_rules! impl_instance {
+    ($INSTANCE:ty) => {
+        impl Instance for $INSTANCE {
+            unsafe fn steal() -> &'static RegisterBlock {
+                &*<$INSTANCE>::ptr()
+            }
+        }
+    };
+}
 
-/// Internal trait used to implement the serial API for PAC USART instances.
-pub trait Instance: Deref<Target = RegisterBlock> + ClockControlExt {}
-
-impl Instance for USART0 {}
-impl Instance for USART1 {}
-impl Instance for USART2 {}
-impl Instance for USART3 {}
+impl_instance!(USART0);
+impl_instance!(USART1);
+impl_instance!(USART2);
+impl_instance!(USART3);
 
 /// Implemented by pin types that can be configured as USART TX pin.
 pub trait TxPin<I: Instance> {
