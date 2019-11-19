@@ -6,37 +6,12 @@ use crate::{
         // Each GPIO has it’s own enum for the mode field even though the values are
         // shared by all GPIOs. Import the first to have nice names for the numeric
         // constants and use the provided u8 conversion to erase type information.
-        gpio::{pa_model::MODE0_A as MODE, RegisterBlock},
+        gpio::pa_model::MODE0_A as MODE,
         GPIO,
     },
+    util::PeripheralClearSetExt,
 };
 use core::{convert::Infallible, marker::PhantomData};
-
-/// Extension trait to use the peripheral bit set and clear feature.
-trait GpioClearSetExt {
-    /// Returns a pointer to the register block in aliased peripheral bit clear
-    /// memory region.
-    ///
-    /// Allows to clear bitfields without a read-modify-write operation.
-    unsafe fn ptr_clear() -> *const RegisterBlock;
-
-    /// Returns a pointer to the register block in aliased peripheral bit set
-    /// memory region.
-    ///
-    /// Allows to set bitfields without a read-modify-write operation.
-    unsafe fn ptr_set() -> *const RegisterBlock;
-}
-
-#[allow(clippy::cast_ptr_alignment)]
-impl GpioClearSetExt for GPIO {
-    unsafe fn ptr_clear() -> *const RegisterBlock {
-        (Self::ptr() as *const u8).offset(0x0400_0000) as *const RegisterBlock
-    }
-
-    unsafe fn ptr_set() -> *const RegisterBlock {
-        (Self::ptr() as *const u8).offset(0x0600_0000) as *const RegisterBlock
-    }
-}
 
 /// Extension trait to split the GPIO register block into individual GPIO pins.
 pub trait GpioExt {

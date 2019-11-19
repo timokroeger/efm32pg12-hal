@@ -8,6 +8,7 @@ use crate::{
         serial::{Read, Write},
     },
     pac::{usart0::RegisterBlock, USART0, USART1, USART2, USART3},
+    util::PeripheralClearSetExt,
 };
 use core::{convert::Infallible, marker::PhantomData, ops::Deref};
 use nb;
@@ -78,7 +79,7 @@ impl<I: Instance> Write<u8> for Tx<I> {
     type Error = Infallible;
 
     fn write(&mut self, word: u8) -> nb::Result<(), Self::Error> {
-        let usart = unsafe { I::steal() };
+        let usart = unsafe { &*I::ptr() };
         if usart.status.read().txbl().bit() {
             usart.txdata.write(|w| unsafe { w.txdata().bits(word) });
             Ok(())
@@ -88,7 +89,7 @@ impl<I: Instance> Write<u8> for Tx<I> {
     }
 
     fn flush(&mut self) -> nb::Result<(), Self::Error> {
-        let usart = unsafe { I::steal() };
+        let usart = unsafe { &*I::ptr() };
         if usart.status.read().txidle().bit() {
             Ok(())
         } else {
@@ -118,7 +119,7 @@ impl<I: Instance> Read<u8> for Rx<I> {
     type Error = Error;
 
     fn read(&mut self) -> nb::Result<u8, Self::Error> {
-        let usart = unsafe { I::steal() };
+        let usart = unsafe { &*I::ptr() };
         if usart.status.read().rxdatav().bit_is_clear() {
             return Err(nb::Error::WouldBlock);
         }
@@ -136,29 +137,15 @@ impl<I: Instance> Read<u8> for Rx<I> {
 }
 
 /// Internal trait used to implement the serial API for PAC USART instances.
-pub trait Instance: Deref<Target = RegisterBlock> + ClockControlExt {
-    // RTFM does not like long lived references.
-    // Instead the `steal()` method can be used to obtain multiple *aliasing*
-    // references to the registers of a single peripheral. Care must be taken
-    // to not use read-modify-write operations on registers that are shared
-    // by multiple references.
-    unsafe fn steal() -> &'static RegisterBlock;
+pub trait Instance:
+    ClockControlExt + Deref<Target = RegisterBlock> + PeripheralClearSetExt<RegisterBlock>
+{
 }
 
-macro_rules! impl_instance {
-    ($INSTANCE:ty) => {
-        impl Instance for $INSTANCE {
-            unsafe fn steal() -> &'static RegisterBlock {
-                &*<$INSTANCE>::ptr()
-            }
-        }
-    };
-}
-
-impl_instance!(USART0);
-impl_instance!(USART1);
-impl_instance!(USART2);
-impl_instance!(USART3);
+impl Instance for USART0 {}
+impl Instance for USART1 {}
+impl Instance for USART2 {}
+impl Instance for USART3 {}
 
 /// Implemented by pin types that can be configured as USART TX pin.
 pub trait TxPin<I: Instance> {

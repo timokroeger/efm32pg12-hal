@@ -16,3 +16,4 @@ pub mod prelude {
         usart::UsartExt as _,
     };
 }
+mod util;
