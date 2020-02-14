@@ -87,6 +87,21 @@ impl<I: Instance> UsartExt<I> for I {
 /// Transmit part of the serial interface for a USART instance.
 pub struct Tx<I: Instance>(PhantomData<I>);
 
+impl<I: Instance> Tx<I> {
+    /// Enables the `TXBL` interrupt which indicates that data can be sent with
+    /// the `write()` method.
+    pub fn enable_interrupt(&mut self) {
+        let usart_set = unsafe { &*I::ptr_set() };
+        usart_set.ien.write(|w| w.txbl().set_bit());
+    }
+
+    /// Disables the `TXBL` interrupt.
+    pub fn disable_interrupt(&mut self) {
+        let usart_clear = unsafe { &*I::ptr_clear() };
+        usart_clear.ien.write(|w| w.txbl().set_bit());
+    }
+}
+
 impl<I: Instance> Write<u8> for Tx<I> {
     type Error = Infallible;
 
