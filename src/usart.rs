@@ -10,8 +10,8 @@ use crate::{
     pac::{usart0::RegisterBlock, USART0, USART1, USART2, USART3},
     util::PeripheralClearSetExt,
 };
-use core::{convert::Infallible, marker::PhantomData, ops::Deref};
-use nb;
+use core::{convert::Infallible, fmt, marker::PhantomData, ops::Deref};
+use nb::{self, block};
 
 /// Serial configuration.
 ///
@@ -111,6 +111,18 @@ impl<I: Instance> Write<u8> for Tx<I> {
 }
 
 impl<I: Instance> BlockingWriteDefault<u8> for Tx<I> {}
+
+impl<I: Instance> fmt::Write for Tx<I>
+where
+    Self: BlockingWriteDefault<u8>,
+{
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        use embedded_hal::blocking::serial::Write;
+        self.bwrite_all(s.as_bytes()).map_err(|_| fmt::Error)?;
+        block!(self.flush()).map_err(|_| fmt::Error)?;
+        Ok(())
+    }
+}
 
 /// Receive part of the serial interface for a USART instance.
 pub struct Rx<I: Instance>(PhantomData<I>);
