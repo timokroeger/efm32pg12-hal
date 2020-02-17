@@ -3,12 +3,7 @@
 
 use core::fmt::Write;
 use cortex_m_rt::entry;
-use efm32pg12_hal::{
-    i2c::I2c,
-    pac::Peripherals,
-    prelude::*,
-    serial::{Config, Serial},
-};
+use efm32pg12_hal::{i2c::I2c, pac::Peripherals, prelude::*, usart::Config as SerialConfig};
 use heapless::{consts::U18, String};
 use panic_abort as _;
 
@@ -25,13 +20,9 @@ fn main() -> ! {
     let _vcom_enable = gpio.pa5.push_pull_output(true);
     let tx_pin = gpio.pa0.push_pull_output(true);
     let rx_pin = gpio.pa1.input();
-    let mut serial = Serial::new(
-        peripherals.USART0,
-        tx_pin,
-        rx_pin,
-        &Config::default(),
-        &mut cmu,
-    );
+    let (mut tx, _) = peripherals
+        .USART0
+        .split(tx_pin, rx_pin, &SerialConfig::default(), &mut cmu);
 
     // Enable the SI7021 humidity sensor with I2C interface.
     // Uses I2C standard speed of approximately 100kHz.
@@ -64,9 +55,9 @@ fn main() -> ! {
                     humidity % 100
                 )
                 .unwrap();
-                serial.bwrite_all(line.as_bytes()).ok();
+                tx.bwrite_all(line.as_bytes()).ok();
             } else {
-                serial.bwrite_all(b"error\n").ok();
+                tx.bwrite_all(b"error\n").ok();
             }
         }
         prev_button_state = button_state;

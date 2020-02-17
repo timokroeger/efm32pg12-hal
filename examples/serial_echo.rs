@@ -2,11 +2,7 @@
 #![no_main]
 
 use cortex_m_rt::entry;
-use efm32pg12_hal::{
-    pac::Peripherals,
-    prelude::*,
-    serial::{Config, Serial},
-};
+use efm32pg12_hal::{pac::Peripherals, prelude::*, usart::Config};
 use nb::block;
 use panic_abort as _;
 
@@ -27,18 +23,14 @@ fn main() -> ! {
     // The peripheral can easily be changed to USART1.
     // For USART2 or USART3 there is an compiler error because the selected
     // pins are not supported by these peripheral instances.
-    let mut serial = Serial::new(
-        peripherals.USART0,
-        tx_pin,
-        rx_pin,
-        &Config::default(),
-        &mut cmu,
-    );
+    let (mut tx, mut rx) = peripherals
+        .USART0
+        .split(tx_pin, rx_pin, &Config::default(), &mut cmu);
 
     // Echo back each received byte.
     loop {
-        if let Ok(b) = block!(serial.read()) {
-            block!(serial.write(b)).ok();
+        if let Ok(b) = block!(rx.read()) {
+            block!(tx.write(b)).ok();
         }
     }
 }

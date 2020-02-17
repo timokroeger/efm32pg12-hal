@@ -1,4 +1,4 @@
-//! Serial API
+//! Serial API for the USART peripheral
 pub use crate::pac::usart0::frame::{PARITY_A as Parity, STOPBITS_A as StopBits};
 use crate::{
     cmu::{ClockControlExt, Cmu},
@@ -8,9 +8,10 @@ use crate::{
         serial::{Read, Write},
     },
     pac::{usart0::RegisterBlock, USART0, USART1, USART2, USART3},
+    util::PeripheralClearSetExt,
 };
-use core::{convert::Infallible, ops::Deref};
-use nb;
+use core::{convert::Infallible, fmt, marker::PhantomData, ops::Deref};
+use nb::{self, block};
 
 /// Serial configuration.
 ///
@@ -32,43 +33,6 @@ impl Default for Config {
     }
 }
 
-/// Serial interface for a USART instance.
-pub struct Serial<U: UsartX>(U);
-
-impl<U: UsartX> Serial<U> {
-    pub fn new<TX, RX>(usart: U, _tx: TX, _rx: RX, config: &Config, cmu: &mut Cmu) -> Self
-    where
-        TX: TxPin<U>,
-        RX: RxPin<U>,
-    {
-        cmu.enable_clock(&usart);
-
-        usart.frame.modify(|_, w| {
-            w.parity()
-                .variant(config.parity)
-                .stopbits()
-                .variant(config.stop_bits)
-        });
-
-        let ovs = 16;
-        let clkdiv = 32 * cmu.hfperclk() / (ovs * config.baudrate) - 32;
-        // TODO: Check accuracy of clock and lower OVS if it is off by too much.
-        usart.clkdiv.modify(|_, w| unsafe { w.div().bits(clkdiv) });
-
-        // Route peripheral to pins.
-        usart
-            .routeloc0
-            .write(|w| unsafe { w.txloc().bits(TX::LOCATION).rxloc().bits(RX::LOCATION) });
-        usart
-            .routepen
-            .write(|w| w.txpen().set_bit().rxpen().set_bit());
-
-        usart.cmd.write(|w| w.txen().set_bit().rxen().set_bit());
-
-        Self(usart)
-    }
-}
-
 /// Serial error
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Error {
@@ -81,15 +45,128 @@ pub enum Error {
     Parity,
 }
 
-impl<U: UsartX> Read<u8> for Serial<U> {
+pub trait UsartExt<I: Instance> {
+    fn split<TX, RX>(self, _tx: TX, _rx: RX, config: &Config, cmu: &mut Cmu) -> (Tx<I>, Rx<I>)
+    where
+        TX: TxPin<I>,
+        RX: RxPin<I>;
+}
+
+impl<I: Instance> UsartExt<I> for I {
+    fn split<TX, RX>(self, _tx: TX, _rx: RX, config: &Config, cmu: &mut Cmu) -> (Tx<I>, Rx<I>)
+    where
+        TX: TxPin<I>,
+        RX: RxPin<I>,
+    {
+        cmu.enable_clock(&self);
+
+        self.frame.modify(|_, w| {
+            w.parity()
+                .variant(config.parity)
+                .stopbits()
+                .variant(config.stop_bits)
+        });
+
+        let ovs = 16;
+        let clkdiv = 32 * cmu.hfperclk() / (ovs * config.baudrate) - 32;
+        // TODO: Check accuracy of clock and lower OVS if it is off by too much.
+        self.clkdiv.modify(|_, w| unsafe { w.div().bits(clkdiv) });
+
+        // Route peripheral to pins.
+        self.routeloc0
+            .write(|w| unsafe { w.txloc().bits(TX::LOCATION).rxloc().bits(RX::LOCATION) });
+        self.routepen
+            .write(|w| w.txpen().set_bit().rxpen().set_bit());
+
+        self.cmd.write(|w| w.txen().set_bit().rxen().set_bit());
+
+        (Tx(PhantomData), Rx(PhantomData))
+    }
+}
+
+/// Transmit part of the serial interface for a USART instance.
+pub struct Tx<I: Instance>(PhantomData<I>);
+
+impl<I: Instance> Tx<I> {
+    /// Enables the `TXBL` interrupt which indicates that data can be sent with
+    /// the `write()` method.
+    pub fn enable_interrupt(&mut self) {
+        let usart_set = unsafe { &*I::ptr_set() };
+        usart_set.ien.write(|w| w.txbl().set_bit());
+    }
+
+    /// Disables the `TXBL` interrupt.
+    pub fn disable_interrupt(&mut self) {
+        let usart_clear = unsafe { &*I::ptr_clear() };
+        usart_clear.ien.write(|w| w.txbl().set_bit());
+    }
+}
+
+impl<I: Instance> Write<u8> for Tx<I> {
+    type Error = Infallible;
+
+    fn write(&mut self, word: u8) -> nb::Result<(), Self::Error> {
+        let usart = unsafe { &*I::ptr() };
+        if usart.status.read().txbl().bit() {
+            usart.txdata.write(|w| unsafe { w.txdata().bits(word) });
+            Ok(())
+        } else {
+            Err(nb::Error::WouldBlock)
+        }
+    }
+
+    fn flush(&mut self) -> nb::Result<(), Self::Error> {
+        let usart = unsafe { &*I::ptr() };
+        if usart.status.read().txidle().bit() {
+            Ok(())
+        } else {
+            Err(nb::Error::WouldBlock)
+        }
+    }
+}
+
+impl<I: Instance> BlockingWriteDefault<u8> for Tx<I> {}
+
+impl<I: Instance> fmt::Write for Tx<I>
+where
+    Self: BlockingWriteDefault<u8>,
+{
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        use embedded_hal::blocking::serial::Write;
+        self.bwrite_all(s.as_bytes()).map_err(|_| fmt::Error)?;
+        block!(self.flush()).map_err(|_| fmt::Error)?;
+        Ok(())
+    }
+}
+
+/// Receive part of the serial interface for a USART instance.
+pub struct Rx<I: Instance>(PhantomData<I>);
+
+impl<I: Instance> Rx<I> {
+    /// Enables the `RXDATAV` interrupt which indicates that data was received
+    /// and can be read with the `read()` method.
+    pub fn enable_interrupt(&mut self) {
+        let usart_set = unsafe { &*I::ptr_set() };
+        usart_set.ien.write(|w| w.rxdatav().set_bit());
+    }
+
+    /// Disables the `RXDATAV` interrupt.
+    pub fn disable_interrupt(&mut self) {
+        let usart_clear = unsafe { &*I::ptr_clear() };
+        usart_clear.ien.write(|w| w.rxdatav().set_bit());
+    }
+}
+
+impl<I: Instance> Read<u8> for Rx<I> {
     type Error = Error;
 
     fn read(&mut self) -> nb::Result<u8, Self::Error> {
-        if self.0.status.read().rxdatav().bit_is_clear() {
+        let usart = unsafe { &*I::ptr() };
+        if usart.status.read().rxdatav().bit_is_clear() {
             return Err(nb::Error::WouldBlock);
         }
 
-        let rxdatax = self.0.rxdatax.read();
+        let rxdatax = usart.rxdatax.read();
         if rxdatax.ferr().bit_is_set() {
             return Err(nb::Error::Other(Error::Framing));
         }
@@ -101,39 +178,19 @@ impl<U: UsartX> Read<u8> for Serial<U> {
     }
 }
 
-impl<U: UsartX> Write<u8> for Serial<U> {
-    type Error = Infallible;
-
-    fn write(&mut self, word: u8) -> nb::Result<(), Self::Error> {
-        if self.0.status.read().txbl().bit() {
-            self.0.txdata.write(|w| unsafe { w.txdata().bits(word) });
-            Ok(())
-        } else {
-            Err(nb::Error::WouldBlock)
-        }
-    }
-
-    fn flush(&mut self) -> nb::Result<(), Self::Error> {
-        if self.0.status.read().txidle().bit() {
-            Ok(())
-        } else {
-            Err(nb::Error::WouldBlock)
-        }
-    }
+/// Internal trait used to implement the serial API for PAC USART instances.
+pub trait Instance:
+    ClockControlExt + Deref<Target = RegisterBlock> + PeripheralClearSetExt<RegisterBlock>
+{
 }
 
-impl<U: UsartX> BlockingWriteDefault<u8> for Serial<U> {}
-
-/// Internal trait used to implement the serial API for PAC USART instances.
-pub trait UsartX: Deref<Target = RegisterBlock> + ClockControlExt {}
-
-impl UsartX for USART0 {}
-impl UsartX for USART1 {}
-impl UsartX for USART2 {}
-impl UsartX for USART3 {}
+impl Instance for USART0 {}
+impl Instance for USART1 {}
+impl Instance for USART2 {}
+impl Instance for USART3 {}
 
 /// Implemented by pin types that can be configured as USART TX pin.
-pub trait TxPin<U: UsartX> {
+pub trait TxPin<I: Instance> {
     const LOCATION: u8;
 }
 
@@ -281,7 +338,7 @@ impl_pin_trait!(TxPin<USART3>, Output, {
 });
 
 /// Implemented by pin types that can be configured as USART RX pin.
-pub trait RxPin<U: UsartX> {
+pub trait RxPin<I: Instance> {
     const LOCATION: u8;
 }
 
