@@ -180,7 +180,9 @@ impl<I: Instance> Read<u8> for Rx<I> {
 
 /// Internal trait used to implement the serial API for PAC USART instances.
 pub trait Instance:
-    ClockControlExt + Deref<Target = RegisterBlock> + PeripheralClearSetExt<RegisterBlock>
+    ClockControlExt
+    + Deref<Target = RegisterBlock>
+    + PeripheralClearSetExt<RegisterBlock = RegisterBlock>
 {
 }
 
