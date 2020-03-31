@@ -4,7 +4,7 @@
 use cortex_m_rt::entry;
 use efm32pg12_hal::{pac::Peripherals, prelude::*, usart::Config};
 use nb::block;
-use panic_abort as _;
+use panic_halt as _;
 
 #[entry]
 fn main() -> ! {

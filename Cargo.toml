@@ -19,7 +19,7 @@ nb = "0.1.2"
 cortex-m = "0.6.0"
 cortex-m-rt = "0.6.10"
 heapless = "0.5.1"
-panic-abort = "0.3.2"
+panic-halt = "0.2"
 
 [features]
 rt = ["efm32pg12-pac/rt"]
