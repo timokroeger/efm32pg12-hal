@@ -9,11 +9,6 @@ pub mod gpio;
 pub mod i2c;
 pub mod usart;
 pub mod prelude {
-    pub use crate::{
-        cmu::CmuExt as _,
-        gpio::GpioExt as _,
-        hal::{digital::v2::*, prelude::*},
-        usart::UsartExt as _,
-    };
+    pub use crate::hal::{digital::v2::*, prelude::*};
 }
 mod util;

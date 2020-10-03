@@ -1,26 +1,20 @@
 //! Clock Managened Unit (CMU) API
 use crate::pac::*;
 
-pub trait CmuExt {
-    fn freeze(self) -> Cmu;
-}
-
-impl CmuExt for CMU {
-    // TODO: Make this configurable
-    fn freeze(self) -> Cmu {
-        Cmu {
-            raw: self,
-            hfclk: 19_000_000,
-        }
-    }
-}
-
 pub struct Cmu {
     raw: CMU,
     hfclk: u32,
 }
 
 impl Cmu {
+    /// Creates the HAL instance for the clock management unit.
+    pub fn new(cmu: CMU) -> Cmu {
+        Cmu {
+            raw: cmu,
+            hfclk: 19_000_000,
+        }
+    }
+
     /// This clock drives the Core Modules, which consists of the CPU and modules
     /// that are tightly coupled to the CPU, e.g. the cache.
     pub fn hfcoreclk(&self) -> u32 {
@@ -103,8 +97,8 @@ impl_lf_clock_control_ext!(RTCC, lfeclken0, rtcc);
 
 // The CSEN peripheral is special because it uses the HF and LF clock domain.
 impl ClockControlExt for CSEN {
-    fn enable_clock(&self, clocks: &mut Cmu) {
-        clocks.raw.hfperclken0.modify(|_, w| w.csen().set_bit());
-        clocks.raw.lfbclken0.modify(|_, w| w.csen().set_bit());
+    fn enable_clock(&self, cmu: &mut Cmu) {
+        cmu.raw.hfperclken0.modify(|_, w| w.csen().set_bit());
+        cmu.raw.lfbclken0.modify(|_, w| w.csen().set_bit());
     }
 }

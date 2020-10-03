@@ -13,12 +13,6 @@ use crate::{
 };
 use core::{convert::Infallible, marker::PhantomData};
 
-/// Extension trait to split the GPIO register block into individual GPIO pins.
-pub trait GpioExt {
-    /// Splits the GPIO register block into individual GPIO pins.
-    fn split(self, cmu: &mut Cmu) -> Parts;
-}
-
 /// Internal trait to abstract away raw register manipulation.
 /// Leaked because it is used as trait bound. Not relevant for the user.
 pub trait PinTrait {
@@ -43,15 +37,16 @@ macro_rules! gpios {
         $pin_nr:expr;
     )*) => {
         /// Contains a field for each individual GPIO pin.
-        pub struct Parts {
+        pub struct Gpio {
             $(pub $field: PinBuilder<$type, Floating, NoFilter>,)*
         }
 
-        impl GpioExt for GPIO {
-            fn split(self, cmu: &mut Cmu) -> Parts {
-                cmu.enable_clock(&self);
+        impl Gpio {
+            /// Creates the GPIO HAL instance wich contains a field for each pin.
+            pub fn new(gpio: GPIO, cmu: &mut Cmu) -> Gpio {
+                cmu.enable_clock(&gpio);
 
-                Parts {
+                Gpio {
                     $(
                         $field: PinBuilder {
                             ty: $type,
@@ -267,7 +262,7 @@ mod builder_types {
 /// Finalization methods like `input()` or `PinBuilder::push_pull_output()` are
 /// only implemented for configurations that are supported by the hardware.
 ///
-/// This can be obtained by accessing a field of [`Parts`] or by calling
+/// This can be obtained by accessing a field of [`Gpio`] or by calling
 /// [`Pin::reset()`] on an existing pin.
 pub struct PinBuilder<T: PinTrait, P: PullTrait, F: FilterTrait> {
     // Use ZST for type state where it makes senses so that the compiler can

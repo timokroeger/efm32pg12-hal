@@ -2,13 +2,14 @@
 #![no_main]
 
 use cortex_m_rt::entry;
-use efm32pg12_hal::{pac::Peripherals, prelude::*};
+use efm32pg12_hal::{cmu::Cmu, gpio::Gpio, pac::Peripherals, prelude::*};
 use panic_halt as _;
+
 #[entry]
 fn main() -> ! {
     let peripherals = Peripherals::take().unwrap();
-    let mut cmu = peripherals.CMU.freeze();
-    let gpio = peripherals.GPIO.split(&mut cmu);
+    let mut cmu = Cmu::new(peripherals.CMU);
+    let gpio = Gpio::new(peripherals.GPIO, &mut cmu);
 
     let mut led0 = gpio.pf4.push_pull_output(false);
     let mut led1 = gpio.pf5.push_pull_output(false);

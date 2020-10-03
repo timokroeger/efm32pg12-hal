@@ -45,22 +45,22 @@ pub enum Error {
     Parity,
 }
 
-pub trait UsartExt<I: Instance> {
-    fn split<TX, RX>(self, _tx: TX, _rx: RX, config: &Config, cmu: &mut Cmu) -> (Tx<I>, Rx<I>)
-    where
-        TX: TxPin<I>,
-        RX: RxPin<I>;
+pub struct Usart<I> {
+    raw: I,
 }
 
-impl<I: Instance> UsartExt<I> for I {
-    fn split<TX, RX>(self, _tx: TX, _rx: RX, config: &Config, cmu: &mut Cmu) -> (Tx<I>, Rx<I>)
+impl<I> Usart<I>
+where
+    I: Instance,
+{
+    pub fn new<TX, RX>(usart: I, _tx: TX, _rx: RX, config: &Config, cmu: &mut Cmu) -> Usart<I>
     where
         TX: TxPin<I>,
         RX: RxPin<I>,
     {
-        cmu.enable_clock(&self);
+        cmu.enable_clock(&usart);
 
-        self.frame.modify(|_, w| {
+        usart.frame.modify(|_, w| {
             w.parity()
                 .variant(config.parity)
                 .stopbits()
@@ -70,16 +70,21 @@ impl<I: Instance> UsartExt<I> for I {
         let ovs = 16;
         let clkdiv = 32 * cmu.hfperclk() / (ovs * config.baudrate) - 32;
         // TODO: Check accuracy of clock and lower OVS if it is off by too much.
-        self.clkdiv.modify(|_, w| unsafe { w.div().bits(clkdiv) });
+        usart.clkdiv.modify(|_, w| unsafe { w.div().bits(clkdiv) });
 
         // Route peripheral to pins.
-        self.routeloc0
+        usart
+            .routeloc0
             .write(|w| unsafe { w.txloc().bits(TX::LOCATION).rxloc().bits(RX::LOCATION) });
-        self.routepen
+        usart
+            .routepen
             .write(|w| w.txpen().set_bit().rxpen().set_bit());
 
-        self.cmd.write(|w| w.txen().set_bit().rxen().set_bit());
+        Usart { raw: usart }
+    }
 
+    pub fn split(self) -> (Tx<I>, Rx<I>) {
+        self.raw.cmd.write(|w| w.txen().set_bit().rxen().set_bit());
         (Tx(PhantomData), Rx(PhantomData))
     }
 }

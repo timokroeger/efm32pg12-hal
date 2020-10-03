@@ -2,14 +2,20 @@
 #![no_main]
 
 use cortex_m_rt::entry;
-use efm32pg12_hal::{pac::Peripherals, prelude::*, usart::Config};
+use efm32pg12_hal::{
+    cmu::Cmu,
+    gpio::Gpio,
+    pac::Peripherals,
+    prelude::*,
+    usart::{Config, Usart},
+};
 use panic_halt as _;
 
 #[entry]
 fn main() -> ! {
     let peripherals = Peripherals::take().unwrap();
-    let mut cmu = peripherals.CMU.freeze();
-    let gpio = peripherals.GPIO.split(&mut cmu);
+    let mut cmu = Cmu::new(peripherals.CMU);
+    let gpio = Gpio::new(peripherals.GPIO, &mut cmu);
 
     // Enable VCOM connection on the starter kit.
     let _vcom_enable = gpio.pa5.push_pull_output(true);
@@ -22,16 +28,25 @@ fn main() -> ! {
     // The peripheral can easily be changed to USART1.
     // For USART2 or USART3 there is an compiler error because the selected
     // pins are not supported by these peripheral instances.
-    let (mut vcom_tx, mut vcom_rx) =
-        peripherals
-            .USART0
-            .split(vcom_tx_pin, vcom_rx_pin, &Config::default(), &mut cmu);
+    let vcom = Usart::new(
+        peripherals.USART0,
+        vcom_tx_pin,
+        vcom_rx_pin,
+        &Config::default(),
+        &mut cmu,
+    );
+    let (mut vcom_tx, mut vcom_rx) = vcom.split();
 
     let tx_pin = gpio.pb6.push_pull_output(true);
     let rx_pin = gpio.pb7.input();
-    let (mut tx, mut rx) = peripherals
-        .USART3
-        .split(tx_pin, rx_pin, &Config::default(), &mut cmu);
+    let usart3 = Usart::new(
+        peripherals.USART3,
+        tx_pin,
+        rx_pin,
+        &Config::default(),
+        &mut cmu,
+    );
+    let (mut tx, mut rx) = usart3.split();
 
     // Echo back each received byte.
     loop {

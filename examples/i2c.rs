@@ -3,15 +3,22 @@
 
 use core::fmt::Write;
 use cortex_m_rt::entry;
-use efm32pg12_hal::{i2c::I2c, pac::Peripherals, prelude::*, usart::Config as SerialConfig};
+use efm32pg12_hal::{
+    cmu::Cmu,
+    gpio::Gpio,
+    i2c::I2c,
+    pac::Peripherals,
+    prelude::*,
+    usart::{Config, Usart},
+};
 use heapless::{consts::U18, String};
 use panic_halt as _;
 
 #[entry]
 fn main() -> ! {
     let peripherals = Peripherals::take().unwrap();
-    let mut cmu = peripherals.CMU.freeze();
-    let gpio = peripherals.GPIO.split(&mut cmu);
+    let mut cmu = Cmu::new(peripherals.CMU);
+    let gpio = Gpio::new(peripherals.GPIO, &mut cmu);
 
     let btn0 = gpio.pf6.pull_up().input();
 
@@ -20,9 +27,14 @@ fn main() -> ! {
     let _vcom_enable = gpio.pa5.push_pull_output(true);
     let tx_pin = gpio.pa0.push_pull_output(true);
     let rx_pin = gpio.pa1.input();
-    let (mut tx, _) = peripherals
-        .USART0
-        .split(tx_pin, rx_pin, &SerialConfig::default(), &mut cmu);
+    let vcom = Usart::new(
+        peripherals.USART0,
+        tx_pin,
+        rx_pin,
+        &Config::default(),
+        &mut cmu,
+    );
+    let (mut tx, _) = vcom.split();
 
     // Enable the SI7021 humidity sensor with I2C interface.
     // Uses I2C standard speed of approximately 100kHz.
