@@ -578,12 +578,16 @@ impl<T: PinTrait> ToggleableOutputPin for Pin<T, Output> {
     }
 }
 
-/// Internal macro to implements a trait for all pins of a specific mode.
-#[macro_export]
-macro_rules! impl_pin_trait {
-    ($PIN_TRAIT:ty, $PIN_MODE:ty, {$($PIN:ty: $loc:expr,)*}) => {
+/// Implemented by pin types that can be mapped to a specific peripheral.
+pub trait PinLocation<Peripheral: ?Sized, PinType> {
+    const LOCATION: u8;
+}
+
+/// Internal macro to implement the [`PinLocation`] trait for all pins of a specific mode.
+macro_rules! impl_pin_locations {
+    ($PERIPHERAL:ty, $PIN_TYPE:ty, $PIN_MODE:ty, {$($PIN:ty: $loc:expr,)*}) => {
         $(
-            impl $PIN_TRAIT for Pin<$PIN, $PIN_MODE> {
+            impl PinLocation<$PERIPHERAL, $PIN_TYPE> for Pin<$PIN, $PIN_MODE> {
                 const LOCATION: u8 = $loc;
             }
         )*

@@ -56,8 +56,8 @@ where
 {
     pub fn new<TX, RX>(usart: I, _tx: TX, _rx: RX, config: &Config, cmu: &mut Cmu) -> Usart<I>
     where
-        TX: TxPin<I>,
-        RX: RxPin<I>,
+        TX: PinLocation<I, TxPin>,
+        RX: PinLocation<I, RxPin>,
     {
         cmu.enable_clock(&usart);
 
@@ -206,12 +206,10 @@ impl Instance for USART1 {}
 impl Instance for USART2 {}
 impl Instance for USART3 {}
 
-/// Implemented by pin types that can be configured as USART TX pin.
-pub trait TxPin<I: Instance> {
-    const LOCATION: u8;
-}
+/// Marks a pin that can be used as USART TX signal.
+pub struct TxPin;
 
-impl_pin_trait!(TxPin<USART0>, Output, {
+impl_pin_locations!(USART0, TxPin, Output, {
     PA0: 0,
     PA1: 1,
     PA2: 2,
@@ -247,7 +245,7 @@ impl_pin_trait!(TxPin<USART0>, Output, {
     PF7: 31,
 });
 
-impl_pin_trait!(TxPin<USART1>, Output, {
+impl_pin_locations!(USART1, TxPin, Output, {
     PA0: 0,
     PA1: 1,
     PA2: 2,
@@ -283,7 +281,7 @@ impl_pin_trait!(TxPin<USART1>, Output, {
     PF7: 31,
 });
 
-impl_pin_trait!(TxPin<USART2>, Output, {
+impl_pin_locations!(USART2, TxPin, Output, {
     PA5: 0,
     PA6: 1,
     PA7: 2,
@@ -319,7 +317,7 @@ impl_pin_trait!(TxPin<USART2>, Output, {
     PK2: 31,
 });
 
-impl_pin_trait!(TxPin<USART3>, Output, {
+impl_pin_locations!(USART3, TxPin, Output, {
     PD8: 0,
     PD9: 1,
     PD10: 2,
@@ -354,12 +352,10 @@ impl_pin_trait!(TxPin<USART3>, Output, {
     PK2: 31,
 });
 
-/// Implemented by pin types that can be configured as USART RX pin.
-pub trait RxPin<I: Instance> {
-    const LOCATION: u8;
-}
+/// Marks a pin that can be used as USART RX signal.
+pub struct RxPin;
 
-impl_pin_trait!(RxPin<USART0>, Input, {
+impl_pin_locations!(USART0, RxPin, Input, {
     PA1: 0,
     PA2: 1,
     PA3: 2,
@@ -395,7 +391,7 @@ impl_pin_trait!(RxPin<USART0>, Input, {
     PA0: 31,
 });
 
-impl_pin_trait!(RxPin<USART1>, Input, {
+impl_pin_locations!(USART1, RxPin, Input, {
     PA1: 0,
     PA2: 1,
     PA3: 2,
@@ -431,7 +427,7 @@ impl_pin_trait!(RxPin<USART1>, Input, {
     PA0: 31,
 });
 
-impl_pin_trait!(RxPin<USART2>, Input, {
+impl_pin_locations!(USART2, RxPin, Input, {
     PA6: 0,
     PA7: 1,
     PA8: 2,
@@ -467,7 +463,7 @@ impl_pin_trait!(RxPin<USART2>, Input, {
     PA5: 31,
 });
 
-impl_pin_trait!(RxPin<USART3>, Input, {
+impl_pin_locations!(USART3, RxPin, Input, {
     PD9: 0,
     PD10: 1,
     PD11: 2,

@@ -20,8 +20,8 @@ impl<I: I2CX> I2c<I> {
         cmu: &mut Cmu,
     ) -> Self
     where
-        SCL: SclPin<I>,
-        SDA: SdaPin<I>,
+        SCL: PinLocation<I, SclPin>,
+        SDA: PinLocation<I, SclPin>,
     {
         cmu.enable_clock(&i2c);
 
@@ -171,12 +171,10 @@ pub trait I2CX: Deref<Target = RegisterBlock> + ClockControlExt {}
 impl I2CX for I2C0 {}
 impl I2CX for I2C1 {}
 
-/// Implemented by pin types that can be configured as I2C SCL pin.
-pub trait SclPin<I: I2CX> {
-    const LOCATION: u8;
-}
+/// Marks a pin that can be used as I2C SCL signal.
+pub struct SclPin;
 
-impl_pin_trait!(SclPin<I2C0>, Output, {
+impl_pin_locations!(I2C0, SclPin, Output, {
     PA1: 0,
     PA2: 1,
     PA3: 2,
@@ -212,7 +210,7 @@ impl_pin_trait!(SclPin<I2C0>, Output, {
     PA0: 31,
 });
 
-impl_pin_trait!(SclPin<I2C1>, Output, {
+impl_pin_locations!(I2C1, SclPin, Output, {
     PA7: 0,
     PA8: 1,
     PA9: 2,
@@ -247,12 +245,10 @@ impl_pin_trait!(SclPin<I2C1>, Output, {
     PA6: 31,
 });
 
-/// Implemented by pin types that can be configured as I2C SDA pin.
-pub trait SdaPin<I: I2CX> {
-    const LOCATION: u8;
-}
+/// Marks a pin that can be used as I2C SDA signal.
+pub struct SdaPin;
 
-impl_pin_trait!(SdaPin<I2C0>, Output, {
+impl_pin_locations!(I2C0, SdaPin, Output, {
     PA0: 0,
     PA1: 1,
     PA2: 2,
@@ -288,7 +284,7 @@ impl_pin_trait!(SdaPin<I2C0>, Output, {
     PF7: 31,
 });
 
-impl_pin_trait!(SdaPin<I2C1>, Output, {
+impl_pin_locations!(I2C1, SdaPin, Output, {
     PA6: 0,
     PA7: 1,
     PA8: 2,
