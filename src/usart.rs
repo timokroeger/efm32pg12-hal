@@ -45,6 +45,7 @@ pub enum Error {
     Parity,
 }
 
+/// USART API
 pub struct Usart<I> {
     raw: I,
 }
@@ -85,12 +86,19 @@ where
 
     pub fn split(self) -> (Tx<I>, Rx<I>) {
         self.raw.cmd.write(|w| w.txen().set_bit().rxen().set_bit());
-        (Tx(PhantomData), Rx(PhantomData))
+        (Tx { _priv: PhantomData }, Rx { _priv: PhantomData })
+    }
+
+    /// Return the raw interface to the underlying peripheral.
+    pub fn release(self) -> I {
+        self.raw
     }
 }
 
 /// Transmit part of the serial interface for a USART instance.
-pub struct Tx<I: Instance>(PhantomData<I>);
+pub struct Tx<I> {
+    _priv: PhantomData<I>,
+}
 
 impl<I: Instance> Tx<I> {
     /// Enables the `TXBL` interrupt which indicates that data can be sent with
@@ -145,7 +153,9 @@ where
 }
 
 /// Receive part of the serial interface for a USART instance.
-pub struct Rx<I: Instance>(PhantomData<I>);
+pub struct Rx<I> {
+    _priv: PhantomData<I>,
+}
 
 impl<I: Instance> Rx<I> {
     /// Enables the `RXDATAV` interrupt which indicates that data was received

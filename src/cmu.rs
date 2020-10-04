@@ -36,6 +36,11 @@ impl Cmu {
     pub fn enable_clock(&mut self, peripheral: &impl ClockControlExt) {
         peripheral.enable_clock(self);
     }
+
+    /// Return the raw interface to the underlying peripheral.
+    pub fn release(self) -> CMU {
+        self.raw
+    }
 }
 
 pub trait ClockControlExt {

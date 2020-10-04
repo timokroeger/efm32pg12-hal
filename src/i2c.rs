@@ -7,7 +7,9 @@ use crate::{
 use core::ops::Deref;
 
 /// I2C API
-pub struct I2c<I: I2CX>(I);
+pub struct I2c<I> {
+    raw: I,
+}
 
 impl<I: I2CX> I2c<I> {
     pub fn new<SCL, SDA>(
@@ -52,40 +54,45 @@ impl<I: I2CX> I2c<I> {
         i2c.routepen
             .write(|w| w.sclpen().set_bit().sdapen().set_bit());
 
-        Self(i2c)
+        Self { raw: i2c }
     }
 
     // Waits for an ACK or NACK of address or data byte.
     fn wait_for_ack(&mut self) -> Result<(), ()> {
         loop {
-            let if_ = self.0.if_.read();
+            let if_ = self.raw.if_.read();
             if if_.nack().bit_is_set() {
-                self.0.ifc.write(|w| w.nack().set_bit());
-                self.0.cmd.write(|w| w.stop().set_bit());
+                self.raw.ifc.write(|w| w.nack().set_bit());
+                self.raw.cmd.write(|w| w.stop().set_bit());
                 return Err(());
             }
             if if_.ack().bit_is_set() {
-                self.0.ifc.write(|w| w.ack().set_bit());
+                self.raw.ifc.write(|w| w.ack().set_bit());
                 return Ok(());
             }
         }
     }
 
     fn write_no_stop(&mut self, address: u8, buffer: &[u8]) -> Result<(), ()> {
-        self.0
+        self.raw
             .txdata
             .write(|w| unsafe { w.txdata().bits(address << 1) });
-        self.0.cmd.write(|w| w.start().set_bit());
+        self.raw.cmd.write(|w| w.start().set_bit());
 
         self.wait_for_ack()?;
 
         for &b in buffer {
-            self.0.txdata.write(|w| unsafe { w.txdata().bits(b) });
+            self.raw.txdata.write(|w| unsafe { w.txdata().bits(b) });
 
             self.wait_for_ack()?;
         }
 
         Ok(())
+    }
+
+    /// Return the raw interface to the underlying peripheral.
+    pub fn release(self) -> I {
+        self.raw
     }
 }
 
@@ -102,8 +109,8 @@ impl<I: I2CX> Read for I2c<I> {
             return Err(());
         }
 
-        self.0.cmd.write(|w| w.start().set_bit());
-        self.0
+        self.raw.cmd.write(|w| w.start().set_bit());
+        self.raw
             .txdata
             .write(|w| unsafe { w.txdata().bits((address << 1) | 1) });
 
@@ -113,7 +120,7 @@ impl<I: I2CX> Read for I2c<I> {
         for (i, b) in buffer.iter_mut().enumerate() {
             // ACK all received bytes but the last.
             // Stop the transfer by sending a NACK.
-            self.0.cmd.write(|w| {
+            self.raw.cmd.write(|w| {
                 if i < last_idx {
                     w.ack().set_bit()
                 } else {
@@ -122,11 +129,11 @@ impl<I: I2CX> Read for I2c<I> {
             });
 
             // Wait for byte to be received.
-            while self.0.if_.read().rxdatav().bit_is_clear() {}
-            *b = self.0.rxdata.read().rxdata().bits();
+            while self.raw.if_.read().rxdatav().bit_is_clear() {}
+            *b = self.raw.rxdata.read().rxdata().bits();
         }
 
-        self.0.cmd.write(|w| w.stop().set_bit());
+        self.raw.cmd.write(|w| w.stop().set_bit());
 
         Ok(())
     }
@@ -138,7 +145,7 @@ impl<I: I2CX> Write for I2c<I> {
 
     fn write(&mut self, address: u8, buffer: &[u8]) -> Result<(), Self::Error> {
         self.write_no_stop(address, buffer)?;
-        self.0.cmd.write(|w| w.stop().set_bit());
+        self.raw.cmd.write(|w| w.stop().set_bit());
         Ok(())
     }
 }
