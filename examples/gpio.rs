@@ -3,10 +3,13 @@
 
 use cortex_m_rt::entry;
 use efm32pg12_hal::{cmu::Cmu, gpio::Gpio, pac::Peripherals, prelude::*};
-use panic_halt as _;
+use panic_rtt_target as _;
+use rtt_target::rtt_init_default;
 
 #[entry]
 fn main() -> ! {
+    rtt_init_default!();
+
     let peripherals = Peripherals::take().unwrap();
     let mut cmu = Cmu::new(peripherals.CMU);
     let gpio = Gpio::new(peripherals.GPIO, &mut cmu);

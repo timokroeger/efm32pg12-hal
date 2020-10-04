@@ -1,40 +1,20 @@
 #![no_std]
 #![no_main]
 
-use core::fmt::Write;
 use cortex_m_rt::entry;
-use efm32pg12_hal::{
-    cmu::Cmu,
-    gpio::Gpio,
-    i2c::I2c,
-    pac::Peripherals,
-    prelude::*,
-    usart::{Config, Usart},
-};
-use heapless::{consts::U18, String};
-use panic_halt as _;
+use efm32pg12_hal::{cmu::Cmu, gpio::Gpio, i2c::I2c, pac::Peripherals, prelude::*};
+use panic_rtt_target as _;
+use rtt_target::{rprintln, rtt_init_print};
 
 #[entry]
 fn main() -> ! {
+    rtt_init_print!();
+
     let peripherals = Peripherals::take().unwrap();
     let mut cmu = Cmu::new(peripherals.CMU);
     let gpio = Gpio::new(peripherals.GPIO, &mut cmu);
 
     let btn0 = gpio.pf6.pull_up().input();
-
-    // Enable VCOM connection on the starter kit.
-    // For more details on the serial API see the serial example.
-    let _vcom_enable = gpio.pa5.push_pull_output(true);
-    let tx_pin = gpio.pa0.push_pull_output(true);
-    let rx_pin = gpio.pa1.input();
-    let vcom = Usart::new(
-        peripherals.USART0,
-        tx_pin,
-        rx_pin,
-        &Config::default(),
-        &mut cmu,
-    );
-    let (mut tx, _) = vcom.split();
 
     // Enable the SI7021 humidity sensor with I2C interface.
     // Uses I2C standard speed of approximately 100kHz.
@@ -54,22 +34,12 @@ fn main() -> ! {
             let cmd = [0xE5u8]; // Measure humidity
             let mut humidity_raw = [0u8; 2]; // Receive buffer
             if i2c.write_read(addr, &cmd, &mut humidity_raw).is_ok() {
-                // Use formula from data sheet  to convert raw data to an
-                // integer with two decimal points.
-                let humidity =
-                    ((12500 * i16::from_be_bytes(humidity_raw) as u32) >> 16) as i16 - 600;
-
-                let mut line: String<U18> = String::new();
-                writeln!(
-                    &mut line,
-                    "humidity: {}.{}%",
-                    humidity / 100,
-                    humidity % 100
-                )
-                .unwrap();
-                tx.bwrite_all(line.as_bytes()).ok();
+                // Use formula from data sheet  to convert raw data to an integer with two
+                // decimal points.
+                let humidity = ((12500 * i16::from_be_bytes(humidity_raw) as u32) >> 16) - 600;
+                rprintln!("humidity: {}.{}%", humidity / 100, humidity % 100);
             } else {
-                tx.bwrite_all(b"error\n").ok();
+                rprintln!("error");
             }
         }
         prev_button_state = button_state;

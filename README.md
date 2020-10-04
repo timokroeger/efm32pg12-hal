@@ -3,6 +3,11 @@
 Hardware abstraction layer (HAL) for the [Silicon Labs EFM32PG12] family of ARM Cortex-M4
 microcontrollers, written in Rust.
 
+## Examples
+
+All examples run on the [SLSTK3402A](https://www.silabs.com/development-tools/mcu/32-bit/efm32pg12-starter-kit)
+EFM32 Pearl Gecko PG12 Starter Kit.
+
 ## Documentation
 
 The [efm32pg12-pac](https://crates.io/crates/efm32pg12-pac) crate provides the register definitions
