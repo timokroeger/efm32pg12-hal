@@ -12,6 +12,7 @@ repository = "https://github.com/timokroeger/efm32pg12-hal"
 
 [dependencies]
 efm32pg12-pac = "0.3.0"
+embedded-error = "0.6"
 embedded-hal = { version = "0.2.3", features = ["unproven"] }
 nb = "0.1.2"
 

@@ -1,3 +1,5 @@
+pub use embedded_error::I2cError as Error;
+
 use crate::{
     cmu::{ClockControlExt, Cmu},
     gpio::*,
@@ -5,6 +7,7 @@ use crate::{
     pac::{i2c0::RegisterBlock, I2C0, I2C1},
 };
 use core::ops::Deref;
+use embedded_error::ImplError;
 
 /// I2C API
 pub struct I2c<I> {
@@ -58,13 +61,13 @@ impl<I: I2CX> I2c<I> {
     }
 
     // Waits for an ACK or NACK of address or data byte.
-    fn wait_for_ack(&mut self) -> Result<(), ()> {
+    fn wait_for_ack(&mut self) -> Result<(), Error> {
         loop {
             let if_ = self.raw.if_.read();
             if if_.nack().bit_is_set() {
                 self.raw.ifc.write(|w| w.nack().set_bit());
                 self.raw.cmd.write(|w| w.stop().set_bit());
-                return Err(());
+                return Err(Error::NACK);
             }
             if if_.ack().bit_is_set() {
                 self.raw.ifc.write(|w| w.ack().set_bit());
@@ -73,7 +76,7 @@ impl<I: I2CX> I2c<I> {
         }
     }
 
-    fn write_no_stop(&mut self, address: u8, buffer: &[u8]) -> Result<(), ()> {
+    fn write_no_stop(&mut self, address: u8, buffer: &[u8]) -> Result<(), Error> {
         self.raw
             .txdata
             .write(|w| unsafe { w.txdata().bits(address << 1) });
@@ -97,16 +100,15 @@ impl<I: I2CX> I2c<I> {
 }
 
 impl<I: I2CX> Read for I2c<I> {
-    // TODO: Better error handling.
-    type Error = ();
+    type Error = Error;
 
-    fn read(&mut self, address: u8, buffer: &mut [u8]) -> Result<(), Self::Error> {
+    fn read(&mut self, address: u8, buffer: &mut [u8]) -> Result<(), Error> {
         // Do not try to read 0 bytes. It is not possible according to the I2C
         // specification, since the slave will always start sending the first
         // byte ACK on an address. The read operation can only be stopped by
         // NACKing a received byte, i.e., minimum 1 byte.
-        if buffer.len() == 0 {
-            return Err(());
+        if buffer.is_empty() {
+            return Err(Error::Impl(ImplError::InvalidConfiguration));
         }
 
         self.raw.cmd.write(|w| w.start().set_bit());
@@ -140,10 +142,9 @@ impl<I: I2CX> Read for I2c<I> {
 }
 
 impl<I: I2CX> Write for I2c<I> {
-    // TODO: Better error handling.
-    type Error = ();
+    type Error = Error;
 
-    fn write(&mut self, address: u8, buffer: &[u8]) -> Result<(), Self::Error> {
+    fn write(&mut self, address: u8, buffer: &[u8]) -> Result<(), Error> {
         self.write_no_stop(address, buffer)?;
         self.raw.cmd.write(|w| w.stop().set_bit());
         Ok(())
@@ -151,15 +152,9 @@ impl<I: I2CX> Write for I2c<I> {
 }
 
 impl<I: I2CX> WriteRead for I2c<I> {
-    // TODO: Better error handling.
-    type Error = ();
+    type Error = Error;
 
-    fn write_read(
-        &mut self,
-        address: u8,
-        bytes: &[u8],
-        buffer: &mut [u8],
-    ) -> Result<(), Self::Error> {
+    fn write_read(&mut self, address: u8, bytes: &[u8], buffer: &mut [u8]) -> Result<(), Error> {
         self.write_no_stop(address, bytes)?;
         self.read(address, buffer)?;
         Ok(())
